@@ -1,6 +1,6 @@
 # flowmap
 
-X-ray vision for any project. Generates interactive HTML flowchart files showing architecture, API wiring, and data flow.
+X-ray vision for any project. Auto-detects project type, scans files, maps architecture, generates interactive HTML.
 
 ## Trigger
 `/flowmap` followed by a subcommand.
@@ -8,160 +8,75 @@ X-ray vision for any project. Generates interactive HTML flowchart files showing
 ## Subcommands
 
 ### `/flowmap scan`
-Full project scan → generates `flowmap-out/index.html` with interactive project map.
+Full project scan → generates `flowmap-out/index.html`. Zero tokens — runs Python script directly.
 
 ### `/flowmap trace <feature>`
-Trace a feature end-to-end → generates `flowmap-out/trace-<feature>.html` with step-by-step flow.
+Trace a feature end-to-end → generates step-by-step flow (uses AI).
 
 ### `/flowmap api`
-All API endpoints + callers → generates `flowmap-out/api-map.html` with connection diagram.
+List all API endpoints + which files call them.
 
 ### `/flowmap wiring`
-Frontend→Backend connections → generates `flowmap-out/wiring.html` with interactive graph.
+Map every frontend→backend connection.
 
 ### `/flowmap hooks`
-All hook chains → generates `flowmap-out/hooks.html` with event flow diagram.
+Show all event/hook chains.
 
-### `/flowmap doc <DocType>`
-DocType lifecycle → generates `flowmap-out/doc-<name>.html` with lifecycle flowchart.
+### `/flowmap doc <name>`
+Lifecycle of a model/class/component.
 
-## Execution Steps
+## Execution
 
-When any subcommand is invoked:
-
-### Step 1: Detect Project
-- Look for `hooks.py` (Frappe), `package.json` (Node), `manage.py` (Django), etc.
-- Set project root and type.
-
-### Step 2: Scan Sources
-- **Python**: Parse `@frappe.whitelist()`, `doc_events`, imports, class defs
-- **JavaScript**: Parse `frappe.call()`, `frappe.xcall()`, event handlers, `frappe.set_route()`
-- **Config**: Parse `hooks.py`, `setup.py`, `package.json`
-- Build relationship data as JSON.
-
-### Step 3: Generate HTML File
-Create `flowmap-out/` directory in project root and generate self-contained HTML files.
-
-#### HTML File Template Structure:
-```html
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Flowmap — {title}</title>
-    <style>/* Full CSS embedded */</style>
-</head>
-<body>
-    <div id="app">
-        <!-- Sidebar: file tree -->
-        <!-- Main: interactive flow diagram -->
-        <!-- Detail panel: file/function details -->
-    </div>
-    <script>
-        const FLOW_DATA = {/* JSON data from scan */};
-        // Interactive rendering logic
-    </script>
-</body>
-</html>
+For `/flowmap scan` — run the standalone scanner (zero tokens):
+```bash
+python3 ~/.claude/skills/flowmap/bin/flowmap.py <project_path>
+open <project>/flowmap-out/index.html
 ```
 
-#### Required HTML Features:
-1. **Interactive nodes** — click to expand, show details
-2. **Connection lines** — SVG arrows between frontend→API→backend
-3. **Color coding** — Python (blue), JS (yellow), DocType (green), Hook (red)
-4. **Search** — filter nodes by name
-5. **Zoom/Pan** — for large projects
-6. **Sidebar** — file tree with click-to-highlight
-7. **Detail panel** — shows file content, endpoint info, callers
-8. **Mermaid diagrams** — embedded for flow traces
-9. **Responsive** — works on mobile too
-10. **Dark/Light mode** — follows system preference
+For other subcommands — use AI to analyze the codebase and generate output.
 
-### Step 4: Open in Browser
-After generating, show the file path and suggest opening it.
+## Auto-Detection
 
-## Output Directory
+The scanner automatically detects project type:
+
+| Detection | Type | What it maps |
+|-----------|------|-------------|
+| `hooks.py` + `modules.txt` | Frappe | Endpoints, hooks, DocTypes, Pages |
+| `manage.py` | Django | URLs, views, models, serializers |
+| `app.py` / `wsgi.py` | Flask | Routes, decorators, blueprints |
+| `main.py` + FastAPI | FastAPI | Router endpoints, dependencies |
+| `package.json` | Node.js | Imports, API calls, routes |
+| `go.mod` | Go | Handlers, structs, interfaces |
+| `Cargo.toml` | Rust | Modules, traits, implementations |
+| `*.py` | Python | Functions, classes, decorators |
+| `*.js/*.ts` | JavaScript | Exports, imports, API calls |
+
+## What it Scans
+
+### Python files (`.py`)
+- Functions with API decorators (`@route`, `@whitelist`, `@api_view`, etc.)
+- All top-level function definitions
+- Class definitions
+- Import statements
+- Module docstrings
+
+### JavaScript/TypeScript files (`.js`, `.ts`, `.jsx`, `.tsx`, `.vue`, `.svelte`)
+- API calls (`fetch`, `axios`, `frappe.call`, `$.ajax`, `useQuery`)
+- Route definitions
+- Export statements
+- Import statements
+
+### Config files
+- `package.json` — name, dependencies, scripts
+- `hooks.py` — event registrations (Frappe)
+- `urls.py` — URL patterns (Django)
+
+## Output
 ```
-flowmap-out/
-├── index.html          # Main project map (from /flowmap scan)
-├── api-map.html        # API endpoint map (from /flowmap api)
-├── wiring.html         # Frontend→Backend wiring (from /flowmap wiring)
-├── hooks.html          # Hook chains (from /flowmap hooks)
-├── trace-*.html        # Feature traces (from /flowmap trace)
-└── doc-*.html          # DocType lifecycles (from /flowmap doc)
-```
-
-## Data Structure for FLOW_DATA
-
-```json
-{
-  "project": {
-    "name": "martram",
-    "type": "frappe",
-    "root": "/path/to/app"
-  },
-  "files": [
-    {
-      "path": "api/workspace.py",
-      "type": "python",
-      "purpose": "Outlet workspace APIs",
-      "endpoints": [
-        {"name": "get_user_outlet", "line": 12, "args": [], "returns": "string"}
-      ],
-      "hooks": [],
-      "imports": ["frappe"]
-    }
-  ],
-  "connections": [
-    {
-      "from": {"file": "public/js/workspace_outlet.js", "line": 150, "type": "frappe.xcall"},
-      "to": {"file": "api/workspace.py", "function": "get_user_outlet"},
-      "label": "get outlet name"
-    }
-  ],
-  "hooks": [
-    {
-      "event": "autoname",
-      "doctype": "Stock Entry",
-      "handler": "martram.api.reference_id.autoname_stock_entry",
-      "file": "api/reference_id.py"
-    }
-  ],
-  "doctypes": [
-    {"name": "Stock Reconciliation Template", "module": "martram", "fields": 5, "child_tables": 1}
-  ]
-}
+project/flowmap-out/
+├── index.html          # Interactive architecture map
+└── flowmap-data.json   # Raw scan data
 ```
 
-## Visual Design Specs
-
-### Node Types & Colors
-| Type | Color | Shape |
-|------|-------|-------|
-| Python API | `#3B82F6` (blue) | Rounded rect |
-| JavaScript | `#EAB308` (yellow) | Rounded rect |
-| DocType | `#22C55E` (green) | Rectangle |
-| Hook/Event | `#EF4444` (red) | Diamond |
-| Page | `#8B5CF6` (purple) | Rounded rect |
-| Fixture | `#6B7280` (gray) | Dashed rect |
-
-### Connection Types
-| Type | Style | Color |
-|------|-------|-------|
-| frappe.call | Solid arrow | `#3B82F6` |
-| doc_event | Dashed arrow | `#EF4444` |
-| import | Dotted line | `#6B7280` |
-| route | Thick arrow | `#8B5CF6` |
-
-### Layout
-- **Left sidebar** (250px): File tree, collapsible folders
-- **Center canvas** (flex): Interactive flow diagram with zoom/pan
-- **Right panel** (300px, toggleable): Selected node details
-- **Top bar**: Search, filter by type, zoom controls, dark/light toggle
-
-## Important Notes
-- All HTML files must be **fully self-contained** (no external CDN dependencies)
-- Use inline SVG for arrows and connections
-- Use CSS Grid/Flexbox for layout
-- Canvas rendering via plain DOM + SVG (no heavy libraries)
-- Keep file size under 500KB per HTML file
-- Add `flowmap-out/` to `.gitignore`
+## Ignored Directories
+`.git`, `node_modules`, `__pycache__`, `.next`, `dist`, `build`, `venv`, `env`, `target`, `vendor`, `migrations`, `static`, `assets`

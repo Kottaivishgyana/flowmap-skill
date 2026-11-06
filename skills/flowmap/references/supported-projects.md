@@ -1,43 +1,48 @@
 # Supported Project Types
 
-## Frappe / ERPNext
-**Detection**: `hooks.py` + `modules.txt` in app root
+## Auto-Detection Order
 
-**What it scans**:
-- `hooks.py` → doc_events, app_include_js, doctype_js, permission_query_conditions, boot_session, fixtures
-- `api/*.py` → `@frappe.whitelist()` endpoints, function definitions
-- `public/js/*.js` → `frappe.call()`, `frappe.xcall()`, `frappe.set_route()`
-- `*/doctype/*/` → DocType JSON files (name, fields, child tables)
-- `*/page/*/` → Custom Page JSON files
+The scanner checks these in order:
 
-**Connections mapped**:
-- JS `frappe.call({method: "app.api.module.function"})` → Python endpoint
-- `doc_events` hook chains (autoname → validate → on_submit)
-- Permission query conditions per DocType
-- Boot session extensions
+1. **Frappe** — `hooks.py` + `modules.txt` exist
+2. **Django** — `manage.py` exists
+3. **Flask** — `app.py` or `wsgi.py` exists
+4. **FastAPI** — `main.py` with "FastAPI" in content
+5. **Node.js** — `package.json` exists
+6. **Go** — `go.mod` exists
+7. **Rust** — `Cargo.toml` exists
+8. **Generic Python** — any `.py` files found
+9. **Generic JavaScript** — any `.js`/`.ts` files found
 
-## Django
-**Detection**: `manage.py` + `settings.py`
+## API Decorator Detection
 
-**What it scans**:
-- `urls.py` → URL patterns and views
-- `views.py` → View functions and classes
-- `models.py` → Model definitions
-- `serializers.py` → DRF serializers
-- `templates/` → Template files
+Python files are scanned for these decorator patterns:
 
-## Node.js / React
-**Detection**: `package.json` + `src/`
+| Pattern | Framework |
+|---------|-----------|
+| `@app.route(...)` | Flask |
+| `@router.get/post/put/delete(...)` | FastAPI |
+| `@api_view(...)` | Django REST Framework |
+| `@action(...)` | DRF ViewSets |
+| `@require_http_methods(...)` | Django |
+| `@login_required` | Django |
+| `@csrf_exempt` | Django |
+| `@*.whitelist(...)` | Frappe |
 
-**What it scans**:
-- `package.json` → dependencies, scripts
-- `src/**/*.{js,ts,jsx,tsx}` → imports, exports, API calls
-- `routes/` or `pages/` → Route definitions
+## JS/TS Call Detection
 
-## Generic Python
-**Detection**: `*.py` files
+Frontend files are scanned for these API call patterns:
 
-**What it scans**:
-- Function definitions and decorators
-- Import statements
-- Class definitions
+| Pattern | Type |
+|---------|------|
+| `fetch("url")` | Native fetch |
+| `axios.get/post("url")` | Axios |
+| `$.get/post/ajax("url")` | jQuery |
+| `frappe.call({method: "..."})` | Frappe |
+| `useQuery("key")` | React Query |
+| `api.get/post("url")` | Custom API client |
+
+## Ignored Directories
+
+These are always skipped during scanning:
+`.git`, `node_modules`, `__pycache__`, `.next`, `dist`, `build`, `venv`, `env`, `.venv`, `.env`, `.tox`, `target`, `vendor`, `flowmap-out`, `.claude`, `migrations`, `static`, `assets`
