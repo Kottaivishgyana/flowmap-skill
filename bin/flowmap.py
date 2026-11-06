@@ -30,8 +30,8 @@ CODE_EXTS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.vue', '.svelte',
              '.dockerfile', '.tf', '.sh', '.bash', '.zsh',
              '.xml', '.svg', '.env.example', '.gitignore'}
 
-MAX_FILES = 2000
-MAX_FILE_SIZE = 200_000  # 200KB per file
+MAX_FILES = 800
+MAX_FILE_SIZE = 100_000  # 100KB per file
 
 
 def should_skip_dir(name):
@@ -51,33 +51,57 @@ def want_file(name):
 
 
 def collect_files(root):
-    """Walk project and read all source files."""
+    """Walk project and read source files. Prioritizes code over docs/config."""
     root = Path(root).resolve()
-    files = {}
-    count = 0
 
+    # Collect all candidate paths first, then prioritize
+    code_exts = {'.py', '.js', '.ts', '.jsx', '.tsx', '.vue', '.svelte',
+                 '.go', '.rs', '.java', '.kt', '.cs', '.php', '.rb', '.dart', '.ex'}
+    skip_exts = {'.md', '.mdx', '.rst', '.txt', '.svg', '.xml'}
+    test_dirs = {'test', 'tests', 'test_', 'testing', 'spec', 'specs', '__tests__'}
+
+    candidates = []
     for dirpath, dirnames, filenames in os.walk(root):
-        # Filter directories
         dirnames[:] = [d for d in dirnames if not should_skip_dir(d)]
-
         for fname in sorted(filenames):
-            if count >= MAX_FILES:
-                break
             if not want_file(fname):
                 continue
-
             fpath = Path(dirpath) / fname
-            rel = str(fpath.relative_to(root))
-
             try:
                 size = fpath.stat().st_size
                 if size > MAX_FILE_SIZE:
                     continue
-                text = fpath.read_text(errors='ignore')
-                files[rel] = text
-                count += 1
             except Exception:
                 continue
+
+            rel = str(fpath.relative_to(root))
+            ext = fpath.suffix.lower()
+            parts = set(rel.split('/'))
+
+            # Priority: 0=core code, 1=config/json, 2=test, 3=docs
+            if ext in code_exts and not parts & test_dirs:
+                pri = 0
+            elif ext in {'.json', '.yaml', '.yml', '.toml', '.html', '.css'}:
+                pri = 1
+            elif parts & test_dirs:
+                pri = 2
+            elif ext in skip_exts:
+                pri = 3
+            else:
+                pri = 1
+
+            candidates.append((pri, rel, fpath))
+
+    # Sort by priority, take top MAX_FILES
+    candidates.sort(key=lambda x: (x[0], x[1]))
+    candidates = candidates[:MAX_FILES]
+
+    files = {}
+    for _, rel, fpath in candidates:
+        try:
+            files[rel] = fpath.read_text(errors='ignore')
+        except Exception:
+            continue
 
     return files
 
