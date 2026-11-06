@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """Flowmap — Zero-token project architecture visualizer.
 
-Reads project files, injects them into the Flowmap HTML app so it auto-scans on open.
+Scans ALL project files, extracts only code-relevant content (strips large
+non-code content), injects into the HTML template for browser rendering.
+
+For large projects: keeps full content of code files (.py, .js, .ts etc),
+but for config/data files (.json, .md, .yaml etc) only keeps first few
+lines as a stub — enough for the parser to detect models/types but not
+enough to bloat the HTML.
 
 Usage:
     python3 flowmap.py [project_path]
-    python3 flowmap.py .
     flowmap /path/to/project
 """
 
@@ -16,22 +21,30 @@ from pathlib import Path
 
 IGNORE_DIRS = {'.git', 'node_modules', '__pycache__', '.next', 'dist', 'build',
                'venv', 'env', '.venv', '.env', '.tox', 'target', 'vendor',
-               'flowmap-out', '.claude', 'migrations', 'static', 'assets',
+               'flowmap-out', '.claude', 'static', 'assets', 'locale',
                '.mypy_cache', '.pytest_cache', '.idea', '.vscode', 'coverage',
-               '.nyc_output', '.parcel-cache', '.turbo', '.svelte-kit'}
+               '.nyc_output', '.parcel-cache', '.turbo', '.svelte-kit',
+               'site-packages', 'egg-info', 'patches', 'translations'}
 
 CODE_EXTS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.vue', '.svelte',
              '.go', '.rs', '.java', '.kt', '.kts', '.scala', '.cs',
-             '.php', '.rb', '.dart', '.ex', '.exs',
-             '.html', '.htm', '.css', '.scss', '.less',
-             '.json', '.yaml', '.yml', '.toml', '.ini', '.cfg',
-             '.sql', '.graphql', '.gql', '.proto', '.prisma',
-             '.md', '.mdx', '.rst', '.txt',
-             '.dockerfile', '.tf', '.sh', '.bash', '.zsh',
-             '.xml', '.svg', '.env.example', '.gitignore'}
+             '.php', '.rb', '.dart', '.ex', '.exs'}
 
-MAX_FILES = 800
-MAX_FILE_SIZE = 100_000  # 100KB per file
+CONFIG_EXTS = {'.json', '.yaml', '.yml', '.toml', '.ini', '.cfg',
+               '.html', '.htm', '.css', '.scss', '.less',
+               '.sql', '.graphql', '.gql', '.proto', '.prisma',
+               '.md', '.mdx', '.rst', '.txt',
+               '.dockerfile', '.tf', '.sh', '.bash', '.zsh',
+               '.xml', '.svg', '.env.example', '.gitignore'}
+
+ALL_EXTS = CODE_EXTS | CONFIG_EXTS
+
+# Code files: keep full content (up to this size)
+MAX_CODE_SIZE = 150_000    # 150KB
+# Config/data files: keep only a stub
+MAX_CONFIG_STUB = 500      # 500 bytes stub for JSON/YAML/MD etc
+# Skip individual files larger than this
+MAX_FILE_SIZE = 500_000    # 500KB absolute max
 
 
 def should_skip_dir(name):
@@ -41,69 +54,64 @@ def should_skip_dir(name):
 def want_file(name):
     if name.startswith('.') and name not in ('.env.example', '.gitignore'):
         return False
-    ext = Path(name).suffix.lower()
-    if ext in CODE_EXTS:
-        return True
-    # Special files without extension
+    # Skip test files
     lname = name.lower()
+    if lname.startswith('test_') or lname.startswith('test.') or lname.endswith('_test.py'):
+        return False
+    ext = Path(name).suffix.lower()
+    if ext in ALL_EXTS:
+        return True
     return lname in ('dockerfile', 'makefile', 'procfile', 'gemfile',
                      'rakefile', 'vagrantfile', 'jenkinsfile', 'pipfile')
 
 
 def collect_files(root):
-    """Walk project and read source files. Prioritizes code over docs/config."""
+    """Walk project, read ALL files. Code files get full content, others get stubs."""
     root = Path(root).resolve()
+    files = {}
+    total = 0
+    skipped = 0
 
-    # Collect all candidate paths first, then prioritize
-    code_exts = {'.py', '.js', '.ts', '.jsx', '.tsx', '.vue', '.svelte',
-                 '.go', '.rs', '.java', '.kt', '.cs', '.php', '.rb', '.dart', '.ex'}
-    skip_exts = {'.md', '.mdx', '.rst', '.txt', '.svg', '.xml'}
-    test_dirs = {'test', 'tests', 'test_', 'testing', 'spec', 'specs', '__tests__'}
-
-    candidates = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if not should_skip_dir(d)]
+        dirnames[:] = sorted(d for d in dirnames if not should_skip_dir(d))
+
         for fname in sorted(filenames):
             if not want_file(fname):
                 continue
+
             fpath = Path(dirpath) / fname
             try:
                 size = fpath.stat().st_size
                 if size > MAX_FILE_SIZE:
+                    skipped += 1
                     continue
             except Exception:
                 continue
 
             rel = str(fpath.relative_to(root))
             ext = fpath.suffix.lower()
-            parts = set(rel.split('/'))
 
-            # Priority: 0=core code, 1=config/json, 2=test, 3=docs
-            if ext in code_exts and not parts & test_dirs:
-                pri = 0
-            elif ext in {'.json', '.yaml', '.yml', '.toml', '.html', '.css'}:
-                pri = 1
-            elif parts & test_dirs:
-                pri = 2
-            elif ext in skip_exts:
-                pri = 3
-            else:
-                pri = 1
+            try:
+                if ext in CODE_EXTS:
+                    # Code files: keep full content
+                    if size <= MAX_CODE_SIZE:
+                        files[rel] = fpath.read_text(errors='ignore')
+                    else:
+                        # Truncate very large code files but keep enough for parsing
+                        text = fpath.read_text(errors='ignore')[:MAX_CODE_SIZE]
+                        files[rel] = text + f'\n# ... truncated ({size} bytes total)\n'
+                else:
+                    # Config/data/docs: keep just a stub for type detection
+                    text = fpath.read_text(errors='ignore')
+                    if len(text) <= MAX_CONFIG_STUB:
+                        files[rel] = text
+                    else:
+                        files[rel] = text[:MAX_CONFIG_STUB] + '\n/* ... truncated */\n'
+                total += 1
+            except Exception:
+                continue
 
-            candidates.append((pri, rel, fpath))
-
-    # Sort by priority, take top MAX_FILES
-    candidates.sort(key=lambda x: (x[0], x[1]))
-    candidates = candidates[:MAX_FILES]
-
-    files = {}
-    for _, rel, fpath in candidates:
-        try:
-            files[rel] = fpath.read_text(errors='ignore')
-        except Exception:
-            continue
-
-    return files
+    return files, total, skipped
 
 
 def generate(root, files, project_name):
@@ -115,22 +123,20 @@ def generate(root, files, project_name):
 
     template = template_path.read_text(errors='ignore')
 
-    # Inject project data as _FLOWMAP_PRELOAD before the main <script>
-    preload_data = json.dumps({
-        "name": project_name,
-        "files": files,
-    })
-    # Escape </script> inside JSON strings to prevent breaking the HTML
+    preload_data = json.dumps({"name": project_name, "files": files})
+    # Escape </script> to prevent HTML breakage
     preload_data = preload_data.replace('</script>', '<\\/script>')
     preload_data = preload_data.replace('</Script>', '<\\/Script>')
     preload_data = preload_data.replace('</SCRIPT>', '<\\/SCRIPT>')
 
+    # Check size
+    size_mb = len(preload_data) / (1024 * 1024)
+    print(f"  HTML data size: {size_mb:.1f} MB")
+
     inject_script = f'<script>const _FLOWMAP_PRELOAD = {preload_data};</script>\n'
 
-    # Insert before the main <script> tag
     html = template.replace('<script>\n/* ---', inject_script + '<script>\n/* ---', 1)
     if inject_script not in html:
-        # Fallback: insert before </body>
         html = template.replace('</body>', inject_script + '</body>')
     return html
 
@@ -143,11 +149,10 @@ def main():
         print(f"Error: Path not found: {start}")
         sys.exit(1)
 
-    # Find project root (go up if needed to find package.json, hooks.py, etc.)
+    # Find project root
     root = start
     indicators = ['package.json', 'hooks.py', 'manage.py', 'go.mod', 'Cargo.toml',
                   'setup.py', 'pyproject.toml', 'app.py', 'main.py']
-    # If start is a subdir (like myapp/myapp), check parent
     if not any((root / f).exists() for f in indicators):
         if any((root.parent / f).exists() for f in indicators):
             root = root.parent
@@ -156,22 +161,25 @@ def main():
     print(f"⚡ Flowmap — scanning {project_name}")
     print(f"  Path: {root}")
 
-    files = collect_files(root)
-    print(f"  Files: {len(files)}")
+    files, total, skipped = collect_files(root)
+    print(f"  Files: {total} scanned ({len(files)} included, {skipped} skipped)")
 
     if not files:
         print("  No source files found!")
         sys.exit(1)
 
-    # Count by extension
+    # Stats
     ext_counts = {}
+    code_count = 0
     for f in files:
-        ext = Path(f).suffix or Path(f).name
+        ext = Path(f).suffix.lower()
         ext_counts[ext] = ext_counts.get(ext, 0) + 1
+        if ext in CODE_EXTS:
+            code_count += 1
     top_exts = sorted(ext_counts.items(), key=lambda x: -x[1])[:5]
+    print(f"  Code files: {code_count} (full content)")
     print(f"  Top: {', '.join(f'{e}({c})' for e, c in top_exts)}")
 
-    # Generate
     html = generate(root, files, project_name)
 
     out_dir = root / "flowmap-out"
@@ -182,7 +190,6 @@ def main():
     print(f"\n✅ Generated: {out_file}")
     print(f"   Open: file://{out_file}")
 
-    # Try to open in browser
     import platform
     if platform.system() == 'Darwin':
         os.system(f'open "{out_file}"')
