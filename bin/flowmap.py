@@ -96,6 +96,10 @@ def generate(root, files, project_name):
         "name": project_name,
         "files": files,
     })
+    # Escape </script> inside JSON strings to prevent breaking the HTML
+    preload_data = preload_data.replace('</script>', '<\\/script>')
+    preload_data = preload_data.replace('</Script>', '<\\/Script>')
+    preload_data = preload_data.replace('</SCRIPT>', '<\\/SCRIPT>')
 
     inject_script = f'<script>const _FLOWMAP_PRELOAD = {preload_data};</script>\n'
 
