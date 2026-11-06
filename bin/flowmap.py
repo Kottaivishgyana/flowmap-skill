@@ -91,49 +91,19 @@ def generate(root, files, project_name):
 
     template = template_path.read_text(errors='ignore')
 
-    # Inject project data as a preload script before </body>
+    # Inject project data as _FLOWMAP_PRELOAD before the main <script>
     preload_data = json.dumps({
         "name": project_name,
         "files": files,
     })
 
-    inject_script = f"""
-<script>
-// Auto-load project scanned by flowmap CLI
-(function() {{
-  const _PRELOAD = {preload_data};
-  // Wait for app to initialize, then load
-  function _tryLoad() {{
-    if (typeof S === 'undefined' || !S.fmap) {{ setTimeout(_tryLoad, 100); return; }}
-    const now = Date.now();
-    S.fmap = new Map();
-    for (const [p, t] of Object.entries(_PRELOAD.files)) {{
-      S.fmap.set(p, {{text: t, mtime: now, size: t.length}});
-    }}
-    Object.assign(S, {{
-      name: _PRELOAD.name,
-      industry: '',
-      stackLabel: '',
-      source: 'snapshot',
-      sel: null, hl: null, mode: null, pathA: null
-    }});
-    if (typeof resetLive === 'function') resetLive();
-    if (typeof rebuild === 'function') rebuild(true);
-    if (typeof busy === 'function') busy(false);
-    if (typeof toast === 'function') toast('Loaded ' + S.fmap.size + ' files from CLI scan.');
-  }}
-  // Start trying after page loads
-  if (document.readyState === 'loading') {{
-    document.addEventListener('DOMContentLoaded', () => setTimeout(_tryLoad, 200));
-  }} else {{
-    setTimeout(_tryLoad, 200);
-  }}
-}})();
-</script>
-"""
+    inject_script = f'<script>const _FLOWMAP_PRELOAD = {preload_data};</script>\n'
 
-    # Insert before </body>
-    html = template.replace('</body>', inject_script + '</body>')
+    # Insert before the main <script> tag
+    html = template.replace('<script>\n/* ---', inject_script + '<script>\n/* ---', 1)
+    if inject_script not in html:
+        # Fallback: insert before </body>
+        html = template.replace('</body>', inject_script + '</body>')
     return html
 
 
