@@ -1,82 +1,72 @@
 # flowmap
 
-X-ray vision for any project. Auto-detects project type, scans files, maps architecture, generates interactive HTML.
+X-ray vision for any project. Auto-detects language and framework, maps architecture, generates interactive HTML with zero tokens.
 
 ## Trigger
-`/flowmap` followed by a subcommand.
+`/flowmap` followed by optional subcommand.
 
-## Subcommands
+## Usage
 
-### `/flowmap scan`
-Full project scan → generates `flowmap-out/index.html`. Zero tokens — runs Python script directly.
+### `/flowmap` or `/flowmap scan`
+Open the Flowmap HTML app in the browser. User can:
+1. Drop a project folder to scan it instantly
+2. Or use the built-in demo projects
 
-### `/flowmap trace <feature>`
-Trace a feature end-to-end → generates step-by-step flow (uses AI).
-
-### `/flowmap api`
-List all API endpoints + which files call them.
-
-### `/flowmap wiring`
-Map every frontend→backend connection.
-
-### `/flowmap hooks`
-Show all event/hook chains.
-
-### `/flowmap doc <name>`
-Lifecycle of a model/class/component.
-
-## Execution
-
-For `/flowmap scan` — run the standalone scanner (zero tokens):
 ```bash
-python3 ~/.claude/skills/flowmap/bin/flowmap.py <project_path>
-open <project>/flowmap-out/index.html
+open ~/.claude/skills/flowmap/bin/template.html
 ```
 
-For other subcommands — use AI to analyze the codebase and generate output.
-
-## Auto-Detection
-
-The scanner automatically detects project type:
-
-| Detection | Type | What it maps |
-|-----------|------|-------------|
-| `hooks.py` + `modules.txt` | Frappe | Endpoints, hooks, DocTypes, Pages |
-| `manage.py` | Django | URLs, views, models, serializers |
-| `app.py` / `wsgi.py` | Flask | Routes, decorators, blueprints |
-| `main.py` + FastAPI | FastAPI | Router endpoints, dependencies |
-| `package.json` | Node.js | Imports, API calls, routes |
-| `go.mod` | Go | Handlers, structs, interfaces |
-| `Cargo.toml` | Rust | Modules, traits, implementations |
-| `*.py` | Python | Functions, classes, decorators |
-| `*.js/*.ts` | JavaScript | Exports, imports, API calls |
-
-## What it Scans
-
-### Python files (`.py`)
-- Functions with API decorators (`@route`, `@whitelist`, `@api_view`, etc.)
-- All top-level function definitions
-- Class definitions
-- Import statements
-- Module docstrings
-
-### JavaScript/TypeScript files (`.js`, `.ts`, `.jsx`, `.tsx`, `.vue`, `.svelte`)
-- API calls (`fetch`, `axios`, `frappe.call`, `$.ajax`, `useQuery`)
-- Route definitions
-- Export statements
-- Import statements
-
-### Config files
-- `package.json` — name, dependencies, scripts
-- `hooks.py` — event registrations (Frappe)
-- `urls.py` — URL patterns (Django)
-
-## Output
-```
-project/flowmap-out/
-├── index.html          # Interactive architecture map
-└── flowmap-data.json   # Raw scan data
+### `/flowmap scan <path>`
+Run the Python pre-scanner on a specific path, then open:
+```bash
+python3 ~/.claude/skills/flowmap/bin/flowmap.py <path>
+open <path>/flowmap-out/index.html
 ```
 
-## Ignored Directories
-`.git`, `node_modules`, `__pycache__`, `.next`, `dist`, `build`, `venv`, `env`, `target`, `vendor`, `migrations`, `static`, `assets`
+## What Flowmap Does (built into the HTML)
+
+### Supported Languages
+Python, JavaScript, TypeScript, Go, Rust, Java, Kotlin, Scala, C#, PHP, Ruby, Dart, Elixir, Prisma, SQL, GraphQL, Protobuf, Docker, Terraform, YAML
+
+### Supported Frameworks (auto-detected)
+Flask, Django, FastAPI, Express, NestJS, Next.js, React, Vue, Svelte, Spring Boot, Laravel, Rails, Frappe/ERPNext, Actix, Rocket, Gin, Echo, Phoenix
+
+### 5 Views
+1. **Overview** — zoomable canvas with nodes, edges, sections, minimap
+2. **Flows** — step-by-step user flows with trace replay
+3. **Wiring** — frontend→backend call map + event chains
+4. **Insights** — health score, issues, hotspots, cycle detection, coverage
+5. **Live** — real-time file watching with change feed
+
+### Features
+- **Auto-detect** language, framework, and stack from file contents
+- **Edge types**: import, HTTP call, event, data reference
+- **Layer classification**: UI, API, service, event, data, infra, config, test, docs
+- **Path tracer** — find path between any two files (P key)
+- **Impact analysis** — what breaks if a file changes (I key)
+- **Health scoring** — layering violations, circular deps, untested code
+- **Cycle detection** — finds circular import chains
+- **Canvas** — zoom, pan, minimap, node selection
+- **Command palette** — ⌘K to search everything
+- **Export** — Markdown report, JSON graph, Mermaid diagrams
+- **Dark/Light theme**
+- **Drag-and-drop** — drop any folder to scan instantly
+- **Keyboard shortcuts** — /, F, P, I, D, L, T, 1-5, Esc
+
+### Keyboard Shortcuts
+| Key | Action |
+|-----|--------|
+| `/` | Focus search |
+| `1-5` | Switch views |
+| `F` | Fit canvas to screen |
+| `P` | Path tracer mode |
+| `I` | Impact analysis mode |
+| `D` | Toggle detail panel |
+| `T` | Toggle theme |
+| `L` | Toggle live mode |
+| `⌘K` | Command palette |
+| `Esc` | Clear selection/mode |
+
+## Files
+- `bin/template.html` — Complete standalone Flowmap app (2400+ lines, self-contained)
+- `bin/flowmap.py` — Optional Python pre-scanner for CLI usage

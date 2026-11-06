@@ -1,48 +1,46 @@
-# Supported Project Types
+# Supported Languages & Frameworks
 
-## Auto-Detection Order
+## Languages (auto-detected from file extension)
+Python, JavaScript, TypeScript, JSX, TSX, Go, Rust, Java, Kotlin, Scala, C#, PHP, Ruby, Dart, Elixir, Prisma, SQL, GraphQL, Protobuf, YAML, Docker, Terraform, HTML, CSS, Markdown
 
-The scanner checks these in order:
+## Frameworks (auto-detected from code patterns)
 
-1. **Frappe** — `hooks.py` + `modules.txt` exist
-2. **Django** — `manage.py` exists
-3. **Flask** — `app.py` or `wsgi.py` exists
-4. **FastAPI** — `main.py` with "FastAPI" in content
-5. **Node.js** — `package.json` exists
-6. **Go** — `go.mod` exists
-7. **Rust** — `Cargo.toml` exists
-8. **Generic Python** — any `.py` files found
-9. **Generic JavaScript** — any `.js`/`.ts` files found
+| Framework | Detection |
+|-----------|-----------|
+| Flask | `@app.route`, `Flask(` |
+| Django | `manage.py`, `urls.py`, `@api_view` |
+| FastAPI | `@router.get/post`, `FastAPI(` |
+| Express | `app.get/post`, `router.` |
+| NestJS | `@Controller`, `@Get/@Post` |
+| Next.js | `next.config`, `pages/` |
+| React | `import React`, `useState` |
+| Vue | `.vue` files, `defineComponent` |
+| Svelte | `.svelte` files |
+| Spring Boot | `@RestController`, `@RequestMapping` |
+| Laravel | `Route::get`, `artisan` |
+| Rails | `routes.rb`, `rails` |
+| Frappe | `hooks.py`, `@frappe.whitelist` |
+| Actix/Rocket | `#[get]`, `#[post]` |
+| Gin/Echo | `r.GET`, `e.GET` |
+| Phoenix | `pipe_through`, `get/post` |
 
-## API Decorator Detection
+## Edge Types
+| Type | Visual | Detection |
+|------|--------|-----------|
+| Import | Gray solid | `import`, `require`, `from`, `use` |
+| HTTP | Blue dashed | `fetch`, `axios`, API calls |
+| Event | Red dotted | Event emitters, hooks, signals |
+| Data | Green dotted | Model references, DB queries |
 
-Python files are scanned for these decorator patterns:
-
-| Pattern | Framework |
-|---------|-----------|
-| `@app.route(...)` | Flask |
-| `@router.get/post/put/delete(...)` | FastAPI |
-| `@api_view(...)` | Django REST Framework |
-| `@action(...)` | DRF ViewSets |
-| `@require_http_methods(...)` | Django |
-| `@login_required` | Django |
-| `@csrf_exempt` | Django |
-| `@*.whitelist(...)` | Frappe |
-
-## JS/TS Call Detection
-
-Frontend files are scanned for these API call patterns:
-
-| Pattern | Type |
-|---------|------|
-| `fetch("url")` | Native fetch |
-| `axios.get/post("url")` | Axios |
-| `$.get/post/ajax("url")` | jQuery |
-| `frappe.call({method: "..."})` | Frappe |
-| `useQuery("key")` | React Query |
-| `api.get/post("url")` | Custom API client |
-
-## Ignored Directories
-
-These are always skipped during scanning:
-`.git`, `node_modules`, `__pycache__`, `.next`, `dist`, `build`, `venv`, `env`, `.venv`, `.env`, `.tox`, `target`, `vendor`, `flowmap-out`, `.claude`, `migrations`, `static`, `assets`
+## Layer Classification
+| Layer | Color | Examples |
+|-------|-------|---------|
+| UI | Yellow | Components, pages, views |
+| API | Blue | Routes, controllers, endpoints |
+| Service | Purple | Business logic, services |
+| Event | Red | Hooks, signals, middleware |
+| Data | Green | Models, schemas, migrations |
+| Infra | Orange | Docker, CI/CD, deploy |
+| Config | Gray | Settings, env, manifests |
+| Test | Cyan | Test files, specs |
+| Docs | Gray | README, docs, comments |
