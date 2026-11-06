@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Flowmap — __PROJECT_NAME__</title>
+<style>
+body{margin:0}
+.fm-dark{--bg:#0f172a;--panel:#1e293b;--section:#1e293b;--node:#111a2e;--step:#111a2e;--raised:#273449;--line:#334155;--text:#e2e8f0;--muted:#94a3b8;--grid:rgba(148,163,184,.13);--shadow:0 1px 2px rgba(0,0,0,.45)}
+.fm-light{--bg:#f1f5f9;--panel:#ffffff;--section:#e8edf4;--node:#ffffff;--step:#f8fafc;--raised:#e2e8f0;--line:#cbd5e1;--text:#0f172a;--muted:#475569;--grid:rgba(71,85,105,.16);--shadow:0 1px 2px rgba(15,23,42,.08)}
+.t-api{--c:#3b82f6;--tint:rgba(59,130,246,.15);--ink:#60a5fa}
+.t-hook{--c:#ef4444;--tint:rgba(239,68,68,.15);--ink:#f87171}
+.t-js{--c:#eab308;--tint:rgba(234,179,8,.15);--ink:#facc15}
+.t-doctype{--c:#22c55e;--tint:rgba(34,197,94,.15);--ink:#4ade80}
+.t-page,.t-ui{--c:#8b5cf6;--tint:rgba(139,92,246,.15);--ink:#a78bfa}
+.t-int{--c:#f97316;--tint:rgba(249,115,22,.15);--ink:#fb923c}
+.t-stat{--c:#06b6d4;--tint:rgba(6,182,212,.15);--ink:#22d3ee}
+.fm-light .t-api{--ink:#1d4ed8}.fm-light .t-hook{--ink:#b91c1c}.fm-light .t-js{--ink:#854d0e}.fm-light .t-doctype{--ink:#15803d}.fm-light .t-page,.fm-light .t-ui{--ink:#6d28d9}.fm-light .t-int{--ink:#c2410c}.fm-light .t-stat{--ink:#0e7490}
+.fm-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.fm-ico{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.fm-ico-fill{fill:currentColor;stroke:none;flex:none}
+.fm-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;min-width:34px;padding:0 12px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.fm-btn:hover{border-color:#3b82f6}.fm-btn.is-on{background:#2563eb;border-color:#2563eb;color:#fff}
+.fm-icon-btn{padding:0;width:34px}
+.fm-chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--text);font:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:opacity .15s,border-color .15s}
+.fm-chip:hover{border-color:var(--c)}.fm-chip.off{background:transparent;color:var(--muted);border-style:dashed}.fm-chip.off .fm-dot{background:transparent;box-shadow:inset 0 0 0 1.5px var(--c)}
+.fm-dot{width:8px;height:8px;border-radius:50%;background:var(--c);flex:none}
+.fm-input{width:100%;height:34px;box-sizing:border-box;padding:0 12px 0 34px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit;font-size:13px}
+.fm-input::placeholder{color:var(--muted)}.fm-input:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.25)}
+.fm-group-head{display:flex;align-items:center;gap:6px;width:100%;height:30px;padding:0 6px;border:0;background:transparent;color:var(--muted);font:inherit;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+.fm-chev{transition:transform .15s}.is-open .fm-chev{transform:rotate(90deg)}
+.fm-side-item{display:flex;align-items:center;gap:10px;width:100%;min-height:30px;padding:4px 8px;box-sizing:border-box;border:0;border-radius:6px;background:transparent;color:var(--text);font:inherit;font-size:12.5px;text-align:left;cursor:pointer}
+.fm-side-item:hover{background:var(--raised)}.fm-side-item.is-sel{background:rgba(59,130,246,.18)}
+.fm-count{margin-left:auto;min-width:20px;padding:0 6px;box-sizing:border-box;border-radius:999px;background:var(--raised);color:var(--muted);font-size:10.5px;line-height:18px;text-align:center}
+.fm-stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.fm-stat-num{font-size:28px;font-weight:800;line-height:1.1;background:linear-gradient(90deg,#3b82f6,#06b6d4);-webkit-background-clip:text;background-clip:text;color:transparent}
+.fm-map{background-color:var(--bg);background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:20px 20px;cursor:grab;touch-action:none;user-select:none}
+.fm-map.is-panning{cursor:grabbing}
+.fm-node{transition:transform .15s,box-shadow .15s,border-color .15s,opacity .2s}
+.fm-node:hover{transform:translateY(-2px);border-color:#3b82f6 !important;box-shadow:0 0 0 1px #3b82f6,0 10px 24px rgba(59,130,246,.22) !important}
+.fm-node.is-sel{border-color:#3b82f6 !important;box-shadow:0 0 0 3px rgba(59,130,246,.45) !important}
+.fm-node.is-dim{opacity:.3}
+.fm-clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fm-badge{display:inline-block;max-width:86px;padding:0 7px;border-radius:999px;background:var(--tint);color:var(--ink);font:500 10.5px/18px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fm-badge-more{background:transparent;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line);font-family:inherit}
+.fm-edge path{fill:none;stroke:var(--c);stroke-width:1.5;opacity:.35;transition:opacity .2s}
+.fm-edge polygon{fill:var(--c);opacity:.5;transition:opacity .2s}
+.fm-edge.is-on path{opacity:1;stroke-width:2.5;stroke-dasharray:7 5;animation:fm-dash .9s linear infinite}
+.fm-edge.is-on polygon{opacity:1}
+.fm-edge.is-off path,.fm-edge.is-off polygon{opacity:.07}
+.fm-step{transition:border-color .15s,box-shadow .15s}.fm-step:hover{border-color:#3b82f6 !important}
+.fm-step.is-on{border-color:var(--c) !important;box-shadow:0 0 0 3px var(--tint);animation:fm-pulse .75s ease-out}
+.fm-step.is-done{border-color:var(--c) !important}
+.fm-conn{background:var(--line);transition:background .2s}.fm-conn.is-done{background:#3b82f6}
+.fm-wire{position:relative;height:2px;min-width:24px;background:repeating-linear-gradient(90deg,var(--c) 0 8px,transparent 8px 13px);background-size:26px 2px;animation:fm-flow .9s linear infinite;margin-right:8px}
+.fm-wire::after{content:"";position:absolute;right:-8px;top:-4px;border-left:8px solid var(--c);border-top:5px solid transparent;border-bottom:5px solid transparent}
+.fm-wrow:hover{border-color:#3b82f6 !important}
+.fm-flows,.fm-wgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+.fm-fade{animation:fm-fade .22s ease-out}
+.fm-kbd{display:inline-block;padding:0 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;background:var(--bg);color:var(--muted);font:600 11px/18px ui-monospace,SFMono-Regular,Menlo,monospace}
+.fm-overlay{position:fixed;inset:0;z-index:50;display:flex;justify-content:center;align-items:flex-start;padding:12vh 16px 16px;box-sizing:border-box;background:rgba(2,6,23,.55)}
+.fm-pal-item{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;box-sizing:border-box;border:0;border-radius:8px;background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer}
+.fm-pal-item:hover,.fm-pal-item.is-act{background:rgba(59,130,246,.18)}
+.fm-dialog{width:100%;max-height:84vh;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:0 24px 60px rgba(2,6,23,.45);overflow:hidden}
+@keyframes fm-pulse{0%{box-shadow:0 0 0 0 rgba(59,130,246,.6)}100%{box-shadow:0 0 0 14px rgba(59,130,246,0)}}
+@keyframes fm-dash{to{stroke-dashoffset:-24}}
+@keyframes fm-flow{to{background-position:26px 0}}
+@keyframes fm-fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media(max-width:1100px){.fm-flows,.fm-wgrid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:900px){.fm-side,.fm-detail{display:none !important}.fm-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:560px){.fm-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+</style>
+</head>
+<body>
+<div class="fm-dark" id="root" tabindex="-1" style="position:relative;height:100vh;min-height:640px;display:flex;flex-direction:column;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;overflow:hidden">
+
+<header style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex:none">
+<div class="t-api" style="display:flex;align-items:center;gap:8px;width:236px;flex:none">
+<svg viewBox="0 0 24 24" width="20" height="20" class="fm-ico-fill" style="color:#3b82f6"><path d="M13 2 4 14h7l-1 8 9-12h-7z"></path></svg>
+<span style="font-size:17px;font-weight:800;letter-spacing:-.01em;color:var(--ink)">Flowmap</span>
+<span id="pName" style="font-size:12px;color:var(--muted);max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span>
+</div>
+<div style="position:relative;flex:1 1 220px;max-width:340px;min-width:180px">
+<svg viewBox="0 0 24 24" width="15" height="15" class="fm-ico" style="position:absolute;left:11px;top:10px;color:var(--muted)"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+<input class="fm-input" type="search" placeholder="Search files, endpoints, hooks…" oninput="filterAll(this.value)" id="searchBox">
+</div>
+<div style="display:flex;gap:4px;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--bg)" id="viewBtns">
+<button class="fm-btn is-on" onclick="setView('overview')" style="height:28px;border-color:transparent">Overview</button>
+<button class="fm-btn" onclick="setView('flows')" style="height:28px;border-color:transparent">Flows</button>
+<button class="fm-btn" onclick="setView('wiring')" style="height:28px;border-color:transparent">Wiring</button>
+</div>
+<div id="filters" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+<div style="display:flex;gap:6px;margin-left:auto">
+<button class="fm-btn" onclick="openPalette()" title="Command palette (⌘K)"><svg viewBox="0 0 24 24" width="15" height="15" class="fm-ico"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>Commands<span class="fm-kbd">⌘K</span></button>
+<button class="fm-btn fm-icon-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle theme"><svg viewBox="0 0 24 24" width="16" height="16" class="fm-ico" id="themeIco"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg></button>
+<button class="fm-btn fm-icon-btn" onclick="togglePanel()" title="Details panel"><svg viewBox="0 0 24 24" width="16" height="16" class="fm-ico"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M15 4v16"></path></svg></button>
+</div>
+</header>
+
+<div style="flex:1 1 auto;min-height:0;display:flex">
+
+<nav class="fm-side" style="width:260px;flex:none;box-sizing:border-box;padding:12px 10px 24px;border-right:1px solid var(--line);background:var(--panel);overflow-y:auto;display:flex;flex-direction:column;gap:10px" id="sidebar"></nav>
+
+<main style="flex:1 1 0;min-width:0;overflow:hidden;display:flex;flex-direction:column" id="canvas"></main>
+
+<aside class="fm-detail" style="width:320px;flex:none;box-sizing:border-box;padding:20px;border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;display:none" id="detail"></aside>
+</div>
+
+<!-- Command Palette Overlay -->
+<div class="fm-overlay" id="palette" style="display:none" onclick="if(event.target===this)closePalette()">
+<div class="fm-dialog" style="max-width:520px;margin-top:0">
+<div style="padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">
+<svg viewBox="0 0 24 24" width="16" height="16" class="fm-ico" style="color:var(--muted);flex:none"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+<input class="fm-input" style="padding-left:12px;border:0;background:transparent" placeholder="Type a command or search…" id="palInput" oninput="filterPalette(this.value)">
+</div>
+<div style="overflow-y:auto;max-height:50vh;padding:6px" id="palList"></div>
+</div>
+</div>
+
+</div>
+<script>
+const D=__FLOW_DATA__;
+let theme='dark',view='overview',selKey=null,panelOpen=false;
+let zoom=.7,tx=40,ty=80,panning=false,panStart={};
+const TF={api:1,hook:1,js:1,doctype:1,page:1};
+const SVG={
+api:'<svg viewBox="0 0 24 24" width="16" height="16" class="fm-ico"><circle cx="12" cy="12" r="2"></circle><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19.1 4.9a10 10 0 0 1 0 14.2M4.9 19.1a10 10 0 0 1 0-14.2"></path></svg>',
+hook:'<svg viewBox="0 0 24 24" width="16" height="16" class="fm-ico"><path d="M13 2 4 14h7l-1 8 9-12h-7z"></path></svg>',
+js:'<svg viewBox="0 0 24 24" width="16" height="16" class="fm-ico"><path d="m8 7-5 5 5 5M16 7l5 5-5 5"></path></svg>',
+doctype:'<svg viewBox="0 0 24 24" width="16" height="16" class="fm-ico"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 10h18M9 10v10"></path></svg>',
+page:'<svg viewBox="0 0 24 24" width="16" height="16" class="fm-ico"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg>'
+};
+const TLABEL={api:'API',hook:'Hook',js:'Frontend',doctype:'DocType',page:'Page'};
+
+function init(){
+document.getElementById('pName').textContent=D.project.name;
+renderFilters();renderSidebar();renderOverview();
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openPalette()}if(e.key==='Escape')closePalette()});
+}
+
+function toggleTheme(){theme=theme==='dark'?'light':'dark';document.getElementById('root').className='fm-'+theme;
+document.getElementById('themeIco').innerHTML=theme==='dark'?'<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>':'<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path>'}
+function togglePanel(){panelOpen=!panelOpen;document.getElementById('detail').style.display=panelOpen?'':'none'}
+
+function setView(v){view=v;document.querySelectorAll('#viewBtns .fm-btn').forEach((b,i)=>b.classList.toggle('is-on',['overview','flows','wiring'][i]===v));
+if(v==='overview')renderOverview();else if(v==='flows')renderFlows();else renderWiring()}
+
+function renderFilters(){
+document.getElementById('filters').innerHTML=[{k:'api',l:'API',c:'t-api'},{k:'hook',l:'Hooks',c:'t-hook'},{k:'js',l:'Frontend',c:'t-js'},{k:'doctype',l:'DocTypes',c:'t-doctype'},{k:'page',l:'Pages',c:'t-page'}].map(f=>`<button class="fm-chip ${f.c}" onclick="TF.${f.k}=!TF.${f.k};this.classList.toggle('off');if(view==='overview')renderOverview()"><span class="fm-dot"></span>${f.l}</button>`).join('')}
+
+function filterAll(q){q=q.toLowerCase();document.querySelectorAll('.fm-node,[data-searchable],.fm-side-item,.fm-step,.fm-wrow').forEach(el=>{el.style.display=el.textContent.toLowerCase().includes(q)||!q?'':'none'})}
+
+function renderSidebar(){
+const sb=document.getElementById('sidebar');
+const G=[
+{l:'API Modules',c:'t-api',items:D.api_files.filter(f=>f.endpoints.length).map(f=>({n:f.name+'.py',b:f.endpoints.length,t:'api',k:f.name}))},
+{l:'Hooks',c:'t-hook',items:D.hook_files.map(f=>({n:f.name+'.py',b:f.handlers.length,t:'hook',k:f.name}))},
+{l:'Frontend',c:'t-js',items:D.js_files.map(f=>({n:f.name+'.js',b:f.calls.length,t:'js',k:f.name}))},
+{l:'DocTypes',c:'t-doctype',items:D.doctypes.map(d=>({n:d.name,b:d.fields,t:'doctype',k:d.name}))},
+{l:'Pages',c:'t-page',items:D.pages.map(p=>({n:p.title,b:0,t:'page',k:p.name}))}];
+sb.innerHTML=G.map(g=>`<div class="${g.c} is-open"><button class="fm-group-head" onclick="this.parentElement.classList.toggle('is-open')"><svg viewBox="0 0 24 24" width="12" height="12" class="fm-ico fm-chev"><path d="m9 6 6 6-6 6"></path></svg><span class="fm-dot"></span><span>${g.l}</span><span style="margin-left:auto;font-weight:600">${g.items.length}</span></button><div style="display:flex;flex-direction:column;gap:1px;margin-top:2px">${g.items.map(it=>`<button class="fm-side-item" onclick="selectNode('${it.t}','${esc(it.k)}')"><span class="fm-dot"></span><span style="flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${it.n}</span>${it.b?`<span class="fm-count">${it.b}</span>`:''}</button>`).join('')}</div></div>`).join('')}
+
+// ══════ OVERVIEW — Canvas with positioned nodes + edges ══════
+function renderOverview(){
+const c=document.getElementById('canvas');const s=D.stats;
+// Compute layout
+const SEC_W=580,NODE_W=260,NODE_H=150,PAD=24,GAP=16;
+const sections=[];const allNodes=[];const edges=[];
+let secY=0;
+const typeItems={
+api:{items:D.api_files.filter(f=>f.endpoints.length),label:'API Endpoints'},
+hook:{items:D.hook_files,label:'Hooks & Events'},
+js:{items:D.js_files,label:'Frontend Scripts'},
+doctype:{items:D.doctypes,label:'Custom DocTypes'},
+page:{items:D.pages,label:'Pages'}};
+Object.entries(typeItems).forEach(([type,{items,label}])=>{
+if(!TF[type]||!items.length)return;
+const cols=2,rows=Math.ceil(items.length/cols);
+const secH=44+rows*(NODE_H+GAP)+PAD;
+sections.push({type,label,count:items.length,x:0,y:secY,w:SEC_W,h:secH});
+items.forEach((item,i)=>{
+const col=i%cols,row=Math.floor(i/cols);
+const nx=PAD+col*(NODE_W+GAP),ny=secY+44+PAD/2+row*(NODE_H+GAP);
+const key=item.name||item.title||'';
+let badges=[];
+if(type==='api')badges=(item.endpoints||[]).map(e=>e.name);
+else if(type==='hook')badges=(item.handlers||[]).map(h=>h.event);
+else if(type==='js')badges=(item.calls||[]).map(c=>c.method.split('.').pop());
+allNodes.push({type,key,name:key+(type!=='doctype'&&type!=='page'?'.'+(type==='js'?'js':'py'):''),desc:item.purpose||'',badges,x:nx,y:ny,item});
+});
+secY+=secH+GAP;
+});
+const W=SEC_W+40,H=secY+40;
+
+// Build edges (JS calls → API)
+D.js_files.forEach(jsf=>{
+jsf.calls.forEach(call=>{
+const parts=call.method.split('.');
+const apiName=parts.length>=4?parts[2]:'';
+const jsNode=allNodes.find(n=>n.type==='js'&&n.key===jsf.name);
+const apiNode=allNodes.find(n=>n.type==='api'&&n.key===apiName);
+if(jsNode&&apiNode){
+const x1=jsNode.x+NODE_W,y1=jsNode.y+NODE_H/2;
+const x2=apiNode.x,y2=apiNode.y+NODE_H/2;
+const mx=(x1+x2)/2;
+edges.push({from:jsNode.key,to:apiNode.key,type:'api',
+d:`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`,
+pts:`${x2},${y2-5} ${x2+10},${y2} ${x2},${y2+5}`});}});});
+
+let h='<div class="fm-fade" style="display:flex;flex-direction:column;gap:12px;padding:16px;flex:none">';
+// Stats
+h+='<div class="fm-stats">';
+[{n:s.endpoints,l:'Endpoints'},{n:s.hooks,l:'Events'},{n:s.doctypes,l:'DocTypes'},{n:s.pages,l:'Pages'},{n:s.js_files,l:'JS Files'},{n:s.py_files,l:'Python'}].forEach(st=>{
+h+=`<div style="padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:var(--shadow)"><div class="fm-stat-num">${st.n}</div><div style="margin-top:2px;color:var(--muted);font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">${st.l}</div></div>`});
+h+='</div>';
+// Legend
+h+='<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;padding:8px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);font-size:12px">';
+[{c:'t-api',l:'API'},{c:'t-hook',l:'Hook'},{c:'t-js',l:'Frontend'},{c:'t-doctype',l:'DocType'},{c:'t-page',l:'Page'}].forEach(lg=>{
+h+=`<span class="${lg.c}" style="display:inline-flex;align-items:center;gap:6px"><span class="fm-dot"></span>${lg.l}</span>`});
+h+=`<span class="t-api" style="display:inline-flex;align-items:center;gap:6px"><span style="width:22px;height:2px;background:var(--c)"></span>calls</span>`;
+h+=`<span style="color:var(--muted);margin-left:auto">Scroll to zoom · drag to pan</span></div></div>`;
+
+// Canvas with zoom/pan
+h+=`<div class="fm-map" id="mapVp" onwheel="onWheel(event)" onpointerdown="onDown(event)" onpointermove="onMove(event)" onpointerup="onUp(event)" style="position:relative;flex:1 1 auto;min-height:460px;overflow:hidden;border:1px solid var(--line);border-radius:12px">`;
+h+=`<div id="world" style="position:absolute;left:0;top:0;width:${W}px;height:${H}px;transform-origin:0 0;transform:translate(${tx}px,${ty}px) scale(${zoom})">`;
+
+// Sections
+sections.forEach(sec=>{
+h+=`<div class="t-${sec.type}" style="position:absolute;left:${sec.x}px;top:${sec.y}px;width:${sec.w}px;height:${sec.h}px;box-sizing:border-box;border:1px solid var(--line);border-radius:14px;background:var(--section)"><div style="display:flex;align-items:center;gap:8px;height:44px;padding:0 20px;font-weight:700;font-size:14px"><span class="fm-dot"></span><span>${sec.label}</span><span style="color:var(--muted);font-weight:500">${sec.count}</span></div></div>`});
+
+// Edges (SVG)
+edges.forEach(e=>{
+h+=`<svg class="fm-edge t-${e.type}" width="${W}" height="${H}" style="position:absolute;left:0;top:0;overflow:visible;pointer-events:none"><path d="${e.d}"></path><polygon points="${e.pts}"></polygon></svg>`});
+
+// Nodes
+allNodes.forEach(n=>{
+h+=`<button class="fm-node t-${n.type}${selKey===n.key?' is-sel':''}" data-key="${esc(n.key)}" onclick="selectNode('${n.type}','${esc(n.key)}')" onmouseenter="highlightEdges('${esc(n.key)}')" onmouseleave="clearEdges()" style="position:absolute;left:${n.x}px;top:${n.y}px;width:${NODE_W}px;height:${NODE_H}px;box-sizing:border-box;padding:12px 14px;display:flex;flex-direction:column;gap:6px;text-align:left;background:var(--node);color:var(--text);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);cursor:pointer;font:inherit;overflow:hidden">`;
+h+=`<span style="display:flex;align-items:center;gap:10px;width:100%"><span style="width:28px;height:28px;border-radius:8px;background:var(--tint);color:var(--ink);display:flex;align-items:center;justify-content:center;flex:none">${SVG[n.type]||''}</span>`;
+h+=`<span style="display:flex;flex-direction:column;min-width:0;flex:1 1 auto"><span style="font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.name}</span><span style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink)">${TLABEL[n.type]||''}</span></span></span>`;
+h+=`<span class="fm-clamp2" style="font-size:12px;line-height:1.35;color:var(--muted)">${n.desc}</span>`;
+if(n.badges.length){h+=`<span style="display:flex;flex-wrap:wrap;gap:4px;margin-top:auto">`;
+n.badges.slice(0,3).forEach(b=>{h+=`<span class="fm-badge">${b}</span>`});
+if(n.badges.length>3)h+=`<span class="fm-badge fm-badge-more">+${n.badges.length-3}</span>`;
+h+='</span>'}
+h+='</button>'});
+h+='</div>';
+
+// Zoom controls
+h+=`<div style="position:absolute;top:12px;right:12px;display:flex;align-items:center;gap:4px;padding:4px;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:var(--shadow)">`;
+h+=`<button class="fm-btn fm-icon-btn" onclick="doZoom(-.1)" style="height:30px;width:30px;min-width:30px;border-color:transparent"><svg viewBox="0 0 24 24" width="15" height="15" class="fm-ico"><path d="M5 12h14"></path></svg></button>`;
+h+=`<span class="fm-mono" id="zoomPct" style="min-width:44px;text-align:center;font-size:11.5px;color:var(--muted)">${Math.round(zoom*100)}%</span>`;
+h+=`<button class="fm-btn fm-icon-btn" onclick="doZoom(.1)" style="height:30px;width:30px;min-width:30px;border-color:transparent"><svg viewBox="0 0 24 24" width="15" height="15" class="fm-ico"><path d="M12 5v14M5 12h14"></path></svg></button>`;
+h+=`<button class="fm-btn fm-icon-btn" onclick="fitAll()" title="Fit to screen" style="height:30px;width:30px;min-width:30px;border-color:transparent"><svg viewBox="0 0 24 24" width="15" height="15" class="fm-ico"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path></svg></button>`;
+h+='</div>';
+
+// Minimap
+const mmScale=.12,mmW=Math.round(W*mmScale),mmH=Math.round(H*mmScale);
+h+=`<div style="position:absolute;right:12px;bottom:12px;width:${mmW}px;height:${mmH}px;border:1px solid var(--line);border-radius:8px;background:var(--panel);box-shadow:var(--shadow);overflow:hidden">`;
+sections.forEach(s=>{h+=`<div class="t-${s.type}" style="position:absolute;left:${Math.round(s.x*mmScale)}px;top:${Math.round(s.y*mmScale)}px;width:${Math.round(s.w*mmScale)}px;height:${Math.round(s.h*mmScale)}px;border-radius:2px;background:var(--section)"></div>`});
+allNodes.forEach(n=>{h+=`<div class="t-${n.type}" style="position:absolute;left:${Math.round(n.x*mmScale)}px;top:${Math.round(n.y*mmScale)}px;width:${Math.round(NODE_W*mmScale)}px;height:${Math.round(NODE_H*mmScale)}px;border-radius:1px;background:var(--c);opacity:.6"></div>`});
+h+='</div></div>';
+c.innerHTML=h;
+}
+
+// Zoom/Pan
+function onWheel(e){e.preventDefault();doZoom(e.deltaY<0?.05:-.05)}
+function doZoom(d){zoom=Math.max(.2,Math.min(2,zoom+d));applyTransform();document.getElementById('zoomPct').textContent=Math.round(zoom*100)+'%'}
+function fitAll(){zoom=.65;tx=40;ty=40;applyTransform();document.getElementById('zoomPct').textContent=Math.round(zoom*100)+'%'}
+function applyTransform(){const w=document.getElementById('world');if(w)w.style.transform=`translate(${tx}px,${ty}px) scale(${zoom})`}
+function onDown(e){if(e.target.closest('.fm-node,.fm-btn'))return;panning=true;panStart={x:e.clientX-tx,y:e.clientY-ty};e.target.closest('.fm-map')?.classList.add('is-panning');e.target.setPointerCapture?.(e.pointerId)}
+function onMove(e){if(!panning)return;tx=e.clientX-panStart.x;ty=e.clientY-panStart.y;applyTransform()}
+function onUp(e){panning=false;document.querySelector('.fm-map')?.classList.remove('is-panning')}
+
+// Edge highlighting
+function highlightEdges(key){document.querySelectorAll('.fm-edge').forEach(e=>{const svg=e;const hasKey=svg.outerHTML.includes(key);svg.classList.toggle('is-on',hasKey);svg.classList.toggle('is-off',!hasKey)});
+document.querySelectorAll('.fm-node').forEach(n=>{if(n.dataset.key!==key){const connected=Array.from(document.querySelectorAll('.fm-edge.is-on')).some(e=>e.outerHTML.includes(n.dataset.key));n.classList.toggle('is-dim',!connected)}})}
+function clearEdges(){document.querySelectorAll('.fm-edge').forEach(e=>{e.classList.remove('is-on','is-off')});document.querySelectorAll('.fm-node').forEach(n=>n.classList.remove('is-dim'))}
+
+// ══════ FLOWS ══════
+function renderFlows(){
+const c=document.getElementById('canvas');
+if(!D.flows||!D.flows.length){c.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted)">No flows defined in data</div>';return}
+let h='<div class="fm-fade" style="padding:20px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px;overflow:auto"><div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px"><h1 style="margin:0;font-size:18px">User flows</h1><span style="color:var(--muted)">Step-by-step paths from click to database.</span></div><div class="fm-flows">';
+D.flows.forEach(flow=>{
+h+=`<section style="padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow)">`;
+h+=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><span class="t-stat" style="width:28px;height:28px;border-radius:8px;background:var(--tint);color:var(--ink);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="16" height="16" class="fm-ico"><circle cx="6" cy="19" r="2"></circle><circle cx="18" cy="5" r="2"></circle><path d="M8 19h8a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h8"></path></svg></span><h2 style="margin:0;font-size:15px">${flow.name}</h2><span style="color:var(--muted);font-size:12px">${flow.steps.length} steps</span></div>`;
+h+='<ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column">';
+flow.steps.forEach((step,i)=>{
+const tc={ui:'t-ui',js:'t-js',api:'t-api',hook:'t-hook'}[step.type]||'t-api';
+h+=`<li class="${tc}" style="display:flex;flex-direction:column">`;
+if(i>0)h+=`<span class="fm-conn" style="display:block;width:2px;height:12px;margin-left:29px"></span>`;
+h+=`<button class="fm-step" style="display:flex;align-items:center;gap:12px;width:100%;padding:9px 12px;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;background:var(--step);color:var(--text);font:inherit;text-align:left;cursor:pointer">`;
+h+=`<span style="width:34px;height:34px;border-radius:9px;background:var(--tint);color:var(--ink);display:flex;align-items:center;justify-content:center;flex:none">${SVG[step.type]||SVG.page}</span>`;
+h+=`<span style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto"><span style="font-weight:700;font-size:13px">${step.label}</span><span class="fm-mono" style="font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${step.file}${step.fn?' → '+step.fn:''}</span></span>`;
+h+=`<span style="flex:none;padding:0 8px;border-radius:999px;background:var(--tint);color:var(--ink);font-size:10.5px;font-weight:800;letter-spacing:.06em;line-height:20px">${step.type.toUpperCase()}</span>`;
+h+='</button></li>'});
+h+='</ol></section>'});
+h+='</div></div>';c.innerHTML=h}
+
+// ══════ WIRING ══════
+function renderWiring(){
+const c=document.getElementById('canvas');const jsWithCalls=D.js_files.filter(f=>f.calls.length);
+let h='<div class="fm-fade" style="padding:20px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px;overflow:auto">';
+h+=`<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px"><h1 style="margin:0;font-size:18px">Frontend → Backend</h1><span style="color:var(--muted)">${jsWithCalls.length} scripts, ${D.js_files.reduce((a,f)=>a+f.calls.length,0)} calls</span></div>`;
+h+='<div class="fm-wgrid">';
+D.js_files.forEach(f=>{
+h+=`<section class="t-js" style="border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow);overflow:hidden">`;
+h+=`<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--tint);border-bottom:1px solid var(--line)"><span style="color:var(--ink);display:flex">${SVG.js}</span><h2 class="fm-mono" style="margin:0;font-size:13px;font-weight:700">${f.name}.js</h2><span class="fm-count">${f.calls.length}</span></div>`;
+h+='<div style="display:flex;flex-direction:column;gap:6px;padding:10px 12px 12px">';
+if(f.calls.length){f.calls.forEach(call=>{
+const fn=call.method.split('.').pop(),mod=call.method.split('.').slice(0,-1).join('.');
+h+=`<button class="fm-wrow" onclick="selectNode('api','${call.method.split('.')[2]||''}')" style="display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;background:var(--step);color:var(--text);font:inherit;text-align:left;cursor:pointer">`;
+h+=`<span class="fm-mono" style="flex:none;padding:0 8px;border-radius:6px;background:var(--tint);color:var(--ink);font-size:11.5px;line-height:22px">frappe.call</span>`;
+h+=`<span class="fm-wire t-api" style="flex:1 1 40px"></span>`;
+h+=`<span class="t-api" style="display:flex;flex-direction:column;min-width:0;flex:0 1 auto;max-width:64%"><span class="fm-mono" style="font-size:12px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${fn}</span><span class="fm-mono" style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${mod}</span></span>`;
+h+='</button>'})}
+else h+='<p style="margin:2px 2px;color:var(--muted);font-size:12px">No server calls — client-side only.</p>';
+h+='</div></section>'});
+h+='</div>';
+
+// Doc event chains
+const chains={};
+D.hook_files.forEach(f=>{f.handlers.forEach(h=>{const dt=h.doctype||'System';if(!chains[dt])chains[dt]=[];chains[dt].push({ev:h.event,fn:h.fn,file:f.name})})});
+h+=`<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;margin-top:8px"><h1 style="margin:0;font-size:18px">Doc event chains</h1><span style="color:var(--muted)">${Object.keys(chains).length} doctypes</span></div>`;
+h+='<div class="fm-wgrid">';
+Object.entries(chains).forEach(([dt,rows])=>{
+h+=`<section class="t-doctype" style="border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow);overflow:hidden">`;
+h+=`<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--tint);border-bottom:1px solid var(--line)"><span style="color:var(--ink);display:flex">${SVG.doctype}</span><h2 style="margin:0;font-size:13.5px;font-weight:700">${dt}</h2><span class="fm-mono" style="color:var(--muted);font-size:11px">${rows.map(r=>r.ev).join(' → ')}</span></div>`;
+h+='<ol style="list-style:none;margin:0;display:flex;flex-direction:column;gap:6px;padding:10px 12px 12px">';
+rows.forEach((cr,i)=>{
+h+=`<li><button class="fm-wrow t-hook" onclick="selectNode('hook','${cr.file}')" style="display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;background:var(--step);color:var(--text);font:inherit;text-align:left;cursor:pointer">`;
+h+=`<span style="flex:none;width:20px;height:20px;border-radius:50%;border:1px solid var(--line);color:var(--muted);font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center">${i+1}</span>`;
+h+=`<span class="fm-mono" style="flex:none;padding:0 8px;border-radius:6px;background:var(--tint);color:var(--ink);font-size:11.5px;line-height:22px">${cr.ev}</span>`;
+h+=`<span class="fm-wire" style="flex:1 1 32px"></span>`;
+h+=`<span style="display:flex;flex-direction:column;min-width:0;flex:0 1 auto;max-width:58%"><span class="fm-mono" style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cr.fn}</span><span class="fm-mono" style="font-size:11px;color:var(--muted)">${cr.file}.py</span></span>`;
+h+='</button></li>'});
+h+='</ol></section>'});
+h+='</div></div>';c.innerHTML=h}
+
+// ══════ DETAIL PANEL ══════
+function selectNode(type,key){
+if(!panelOpen){panelOpen=true;document.getElementById('detail').style.display=''}
+selKey=key;
+document.querySelectorAll('.fm-node').forEach(n=>{n.classList.toggle('is-sel',n.dataset.key===key)});
+document.querySelectorAll('.fm-side-item').forEach(n=>{n.classList.toggle('is-sel',n.textContent.includes(key))});
+const el=document.querySelector(`.fm-node[data-key="${key}"]`);
+if(el)el.scrollIntoView({behavior:'smooth',block:'nearest'});
+const p=document.getElementById('detail');let h='';
+if(type==='api'){const f=D.api_files.find(a=>a.name===key);if(!f)return;
+h+=`<div class="t-api" style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span class="fm-dot" style="width:10px;height:10px"></span><span style="font-size:16px;font-weight:700">${f.name}.py</span></div>`;
+h+=`<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:16px">API Module · ${f.path}</div>`;
+if(f.purpose)h+=`<div style="font-size:12.5px;color:var(--muted);line-height:1.5;margin-bottom:16px">${f.purpose}</div>`;
+h+=`<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px">Endpoints (${f.endpoints.length})</div>`;
+f.endpoints.forEach(e=>{h+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;margin-bottom:4px;border:1px solid var(--line);background:var(--node)" class="t-api"><span class="fm-badge">@whitelist</span><span class="fm-mono" style="font-weight:600;font-size:12px">${e.name}</span><span style="color:var(--muted);font-size:11px">(${e.args.join(', ')})</span><span style="margin-left:auto;color:var(--muted);font-size:10.5px">:${e.line}</span></div>`});
+const callers=[];D.js_files.forEach(js=>{js.calls.forEach(c=>{if(c.method.includes(f.name))callers.push(js.name+'.js')})});
+if(callers.length){h+=`<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:16px 0 8px">Called by (${[...new Set(callers)].length})</div>`;
+[...new Set(callers)].forEach(c=>{h+=`<div class="t-js" style="display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:12px;border-radius:6px;margin-bottom:2px;border:1px solid var(--line);background:var(--node)"><span class="fm-dot"></span><span class="fm-mono" style="color:var(--ink);font-weight:600">${c}</span></div>`})}
+}else if(type==='hook'){const f=D.hook_files.find(a=>a.name===key);if(!f)return;
+h+=`<div class="t-hook" style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span class="fm-dot" style="width:10px;height:10px"></span><span style="font-size:16px;font-weight:700">${f.name}.py</span></div>`;
+h+=`<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:16px">Hook Handler</div>`;
+if(f.purpose)h+=`<div style="font-size:12.5px;color:var(--muted);line-height:1.5;margin-bottom:16px">${f.purpose}</div>`;
+h+=`<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px">Handlers (${f.handlers.length})</div>`;
+f.handlers.forEach(handler=>{h+=`<div style="padding:10px;border-radius:8px;margin-bottom:6px;border:1px solid var(--line);background:var(--node)"><div class="t-hook" style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span class="fm-badge">${handler.event}</span><span style="font-size:12px;color:var(--muted)">→ ${handler.doctype||'boot'}</span></div><div class="fm-mono" style="font-size:11px;color:var(--muted)">${handler.fn}</div></div>`})
+}else if(type==='js'){const f=D.js_files.find(a=>a.name===key);if(!f)return;
+h+=`<div class="t-js" style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span class="fm-dot" style="width:10px;height:10px"></span><span style="font-size:16px;font-weight:700">${f.name}.js</span></div>`;
+h+=`<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:16px">Frontend Script</div>`;
+if(f.purpose)h+=`<div style="font-size:12.5px;color:var(--muted);line-height:1.5;margin-bottom:16px">${f.purpose}</div>`;
+if(f.calls.length){h+=`<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px">API Calls (${f.calls.length})</div>`;
+f.calls.forEach(c=>{h+=`<div class="t-api" style="padding:6px 10px;border-radius:6px;margin-bottom:4px;font-size:12px;display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--node)"><span style="color:var(--ink)">→</span><span class="fm-mono" style="font-weight:600">${c.method.split('.').pop()}</span><span style="margin-left:auto;color:var(--muted);font-size:10.5px">:${c.line}</span></div>`})}
+if(f.routes&&f.routes.length){h+=`<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:16px 0 8px">Routes</div>`;
+f.routes.forEach(r=>{h+=`<div class="t-page" style="padding:4px 10px;font-size:12px;display:flex;align-items:center;gap:6px;margin-bottom:2px"><span style="color:var(--ink)">↗</span>${r}</div>`})}
+}else if(type==='doctype'){const d=D.doctypes.find(a=>a.name===key);if(!d)return;
+h+=`<div class="t-doctype" style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span class="fm-dot" style="width:10px;height:10px"></span><span style="font-size:16px;font-weight:700">${d.name}</span></div>`;
+h+=`<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:16px">DocType · ${d.fields} fields</div>`;
+}else if(type==='page'){const pg=D.pages.find(a=>a.name===key||a.title===key);if(!pg)return;
+h+=`<div class="t-page" style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span class="fm-dot" style="width:10px;height:10px"></span><span style="font-size:16px;font-weight:700">${pg.title}</span></div>`;
+h+=`<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:16px">Custom Page</div>`}
+p.innerHTML=h}
+
+// ══════ COMMAND PALETTE ══════
+function openPalette(){document.getElementById('palette').style.display='';document.getElementById('palInput').value='';document.getElementById('palInput').focus();renderPaletteItems('')}
+function closePalette(){document.getElementById('palette').style.display='none'}
+function filterPalette(q){renderPaletteItems(q.toLowerCase())}
+function renderPaletteItems(q){
+const items=[
+...D.api_files.filter(f=>f.endpoints.length).map(f=>({name:f.name+'.py',type:'api',key:f.name,desc:'API · '+f.endpoints.length+' endpoints'})),
+...D.hook_files.map(f=>({name:f.name+'.py',type:'hook',key:f.name,desc:'Hook · '+f.handlers.length+' handlers'})),
+...D.js_files.map(f=>({name:f.name+'.js',type:'js',key:f.name,desc:'Frontend · '+f.calls.length+' calls'})),
+...D.doctypes.map(d=>({name:d.name,type:'doctype',key:d.name,desc:'DocType · '+d.fields+' fields'})),
+...D.pages.map(p=>({name:p.title,type:'page',key:p.name,desc:'Page'}))];
+const filtered=q?items.filter(i=>i.name.toLowerCase().includes(q)||i.desc.toLowerCase().includes(q)):items;
+document.getElementById('palList').innerHTML=filtered.map(i=>`<button class="fm-pal-item t-${i.type}" onclick="closePalette();setView('overview');setTimeout(()=>selectNode('${i.type}','${esc(i.key)}'),100)"><span class="fm-dot"></span><span style="flex:1;min-width:0"><span style="font-weight:600">${i.name}</span><br><span style="font-size:11px;color:var(--muted)">${i.desc}</span></span><span class="fm-kbd">${i.type}</span></button>`).join('')||'<p style="padding:12px;color:var(--muted);text-align:center">No results</p>'}
+
+function esc(s){return String(s).replace(/'/g,"\\'")}
+init();
+</script>
+</body>
+</html>

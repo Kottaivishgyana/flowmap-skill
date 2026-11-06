@@ -1,0 +1,29 @@
+{
+  "name": "flowmap",
+  "version": "1.0.0",
+  "description": "X-ray vision for any project. Scans codebase and generates interactive HTML architecture maps with zero AI tokens.",
+  "author": "vgts",
+  "skills": ["flowmap"],
+  "commands": ["flowmap"],
+  "files": {
+    "scanner": "bin/flowmap.py",
+    "template": "bin/template.html"
+  },
+  "install": {
+    "post_install": "bash scripts/install.sh"
+  },
+  "supported_projects": [
+    "frappe",
+    "django",
+    "nodejs",
+    "python"
+  ],
+  "keywords": [
+    "architecture",
+    "flowchart",
+    "visualization",
+    "codebase-map",
+    "frappe",
+    "zero-tokens"
+  ]
+}
