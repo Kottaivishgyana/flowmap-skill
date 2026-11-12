@@ -1674,24 +1674,23 @@ function renderView(fit){
 function renderAll(fit){ renderHeader(); renderSidebar(); renderView(fit); renderDetail(); }
 async function rebuild(fit){
   const n = S.fmap.size;
-  if (n > 150) {
-    busy(true, `Parsing ${n} files…`);
-    // Chunked parsing: parse files in batches, yield to browser for UI updates
-    const BATCH = 80;
-    const entries = [...S.fmap.entries()];
-    let parsed = 0;
-    for (let i = 0; i < entries.length; i += BATCH) {
-      const batch = entries.slice(i, i + BATCH);
-      for (const [p, o] of batch) {
-        if (!o.parsed) o.parsed = parseFile(p, o.text);
+  try {
+    if (n > 150) {
+      busy(true, `Parsing ${n} files…`);
+      const BATCH = 200;
+      const entries = [...S.fmap.entries()];
+      let parsed = 0;
+      for (let i = 0; i < entries.length; i += BATCH) {
+        const batch = entries.slice(i, i + BATCH);
+        for (const [p, o] of batch) {
+          if (!o.parsed) o.parsed = parseFile(p, o.text);
+        }
+        parsed += batch.length;
+        busy(true, `Parsing files… ${parsed}/${n}`);
+        await new Promise(r => setTimeout(r, 4));
       }
-      parsed += batch.length;
-      busy(true, `Parsing files… ${parsed}/${n}`);
-      await new Promise(r => setTimeout(r, 0)); // yield to browser
-    }
-    busy(true, `Analyzing ${n} files…`);
-    await new Promise(r => setTimeout(r, 16));
-    try {
+      busy(true, `Wiring ${n} files…`);
+      await new Promise(r => setTimeout(r, 16));
       S.P = analyze(S.fmap);
       busy(true, 'Laying out map…');
       await new Promise(r => setTimeout(r, 16));
@@ -1699,10 +1698,14 @@ async function rebuild(fit){
       busy(true, 'Rendering…');
       await new Promise(r => setTimeout(r, 16));
       renderAll(fit);
-      busy(false);
-    } catch(e) { busy(false); toast('Analysis error: ' + e.message); console.error(e); }
-  } else {
-    S.P = analyze(S.fmap); layoutMap(); renderAll(fit);
+    } else {
+      S.P = analyze(S.fmap); layoutMap(); renderAll(fit);
+    }
+  } catch(e) {
+    console.error('Rebuild failed:', e);
+    toast('Error: ' + e.message);
+  } finally {
+    busy(false);
   }
 }
 window.addEventListener('hashchange', () => go(location.hash.slice(1)));
@@ -1850,7 +1853,7 @@ async function loadPreloadData() {
   resetLive();
   // Yield to browser before heavy analysis
   await new Promise(r => setTimeout(r, 50));
-  rebuild(true);
+  await rebuild(true);
   toast('Loaded ' + S.fmap.size + ' files.');
   return true;
 }
