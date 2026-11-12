@@ -20,10 +20,7 @@ Project architecture visualizer + security analyzer. Finds project folder, scans
 ```bash
 python3 ~/.claude/skills/flowmap/bin/flowmap.py <resolved_path>
 ```
-Then open in browser (ONE time only — do NOT open twice):
-```bash
-open <resolved_path>/flowmap-out/index.html
-```
+Do NOT open the browser yet. Wait until Step 3 is done.
 
 ### Step 3: Claude vulnerability & bug analysis (MANDATORY)
 After HTML generation, Claude MUST analyze the project for real bugs and vulnerabilities.
@@ -54,27 +51,32 @@ Grep: "CORS|cors.*origin.*\*|verify.*False|rejectUnauthorized.*false" (Misconfig
 - **Logic Bugs**: unchecked return values, race conditions, missing null checks, infinite loops
 - **Error Handling**: bare except/catch, swallowed errors, missing error responses
 
-**3c. Inject findings into HTML** — MUST inject findings directly into the generated HTML file so they display in the browser. Use the Edit tool on `<resolved_path>/flowmap-out/index.html`:
+**3c. Inject findings into HTML** — Use the Edit tool on `<resolved_path>/flowmap-out/index.html`:
 
 Replace this exact string:
 ```
 <!-- FLOWMAP_FINDINGS_INJECT -->
 ```
-With a script tag containing the findings array:
+With:
 ```
 <script>const _FLOWMAP_FINDINGS = [
-  {"sev":"CRITICAL","file":"api/auth.py:45","issue":"SQL injection — user input concatenated into query","fix":"Use parameterized query"},
-  {"sev":"HIGH","file":"utils/file.py:23","issue":"Path traversal — request param in open()","fix":"Validate with os.path.realpath()"},
-  {"sev":"MED","file":"settings.py:12","issue":"DEBUG=True in non-dev config","fix":"Set DEBUG=False or use env var"}
+  {"sev":"CRITICAL","file":"api/auth.py:45","issue":"SQL injection","fix":"Use parameterized query"},
+  {"sev":"HIGH","file":"utils/file.py:23","issue":"Path traversal","fix":"Validate path"}
 ];</script>
 <!-- FLOWMAP_FINDINGS_INJECT -->
 ```
 
-**IMPORTANT**: Keep the `<!-- FLOWMAP_FINDINGS_INJECT -->` marker after the script tag.
-Valid sev values: CRITICAL, HIGH, MED, LOW, INFO
-The `file` field should be the relative path with optional `:line` suffix.
+Keep the marker after the script tag. Valid sev: CRITICAL, HIGH, MED, LOW, INFO.
 
-**3d. Output Security Report** in terminal too:
+If no issues: inject `const _FLOWMAP_FINDINGS = [];`
+
+### Step 4: Open browser and report
+ONLY after findings are injected, open the HTML:
+```bash
+open <resolved_path>/flowmap-out/index.html
+```
+
+Then output the security report table in terminal:
 ```
 ## Security & Bug Report
 
@@ -82,17 +84,9 @@ The `file` field should be the relative path with optional `:line` suffix.
 |-----|-----------|-------|-----|
 ```
 
-If no issues found: inject empty array `const _FLOWMAP_FINDINGS = [];` and say "No vulnerabilities detected."
-
-The HTML page reads `_FLOWMAP_FINDINGS` and shows:
-- **Insights tab**: "Claude AI Analysis" card with severity/file/issue/fix table
-- **Detail panel**: When user clicks a file, Claude findings for that file show in the right panel
-
-### Step 4: Report result
-Tell user:
-1. Files scanned count, output path, browser opened
-2. The security report table from Step 3
-3. Health score from the HTML (if visible in terminal output)
+The HTML page shows:
+- **Insights tab** → "Claude AI Analysis" card with all findings in a table
+- **Detail panel** → Click any file → right panel shows Claude findings for that file
 
 ## Examples
 ```
@@ -105,7 +99,8 @@ Tell user:
 - 4 views: Overview (zoomable canvas), Flows, Wiring, Insights (health score + security scan)
 - Auto-detects 20+ languages, 15+ frameworks
 - Maps imports, API calls, events, data references
-- **Built-in security scanner** detects 15+ vulnerability types with line numbers
+- **Pattern Scanner**: 15+ regex vulnerability detectors with line numbers
+- **Claude AI Analysis**: real findings injected after AI review
 - Health scoring, cycle detection, impact analysis
 - Virtual rendering for large projects (500+ files) — smooth pan/zoom
-- CLI-only mode — no folder picker, no live watch, no upload. Run `/flowmap <project>` to use.
+- CLI-only mode — run `/flowmap <project>` to use
