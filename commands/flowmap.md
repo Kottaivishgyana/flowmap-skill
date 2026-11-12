@@ -1,42 +1,23 @@
 # /flowmap
 
-Project architecture visualizer. Scans codebase and generates interactive HTML maps.
+Project architecture visualizer + security analyzer. Scans codebase and generates interactive HTML maps.
 
 ## Usage
 
 ```
-/flowmap                  # Scan current project, generate HTML, open in browser
-/flowmap scan             # Same as above
-/flowmap scan /path/to/app  # Scan specific app path
-/flowmap trace <feature>  # Trace a feature end-to-end (uses AI tokens)
-/flowmap api              # Show all API endpoints + callers
-/flowmap wiring           # Show frontend→backend connections
-/flowmap hooks            # Show all hook chains
+/flowmap                     # Scan current project
+/flowmap <name_or_path>      # Scan specific project
 ```
 
 ## Execution
 
-When `/flowmap` or `/flowmap scan` is invoked:
+When `/flowmap` is invoked, read `~/.claude/skills/flowmap/SKILL.md` and follow ALL steps there.
 
-1. Run the standalone Python scanner — **zero tokens**:
-   ```bash
-   python3 ~/.claude/skills/flowmap/bin/flowmap.py <project_path>
-   ```
-2. Open the generated HTML:
-   ```bash
-   open <project>/flowmap-out/index.html
-   ```
-3. Report: "Generated flowmap at flowmap-out/index.html"
-
-When `/flowmap trace <feature>` is invoked:
-1. Read the skill file at `~/.claude/skills/flowmap/SKILL.md`
-2. Use AI to trace the feature through the codebase
-3. Generate a Mermaid flowchart and add to the HTML
+The Python scanner auto-opens the browser. Do NOT run `open` separately — it causes duplicate tabs.
 
 ## Output
 
 ```
 flowmap-out/
-├── index.html          # Interactive architecture map (self-contained)
-└── flowmap-data.json   # Raw scan data
+└── index.html          # Interactive architecture map (self-contained)
 ```

@@ -199,11 +199,13 @@ def main():
     print(f"\n✅ Generated: {out_file}")
     print(f"   Open: file://{out_file}")
 
-    import platform
-    if platform.system() == 'Darwin':
-        os.system(f'open "{out_file}"')
-    elif platform.system() == 'Linux':
-        os.system(f'xdg-open "{out_file}" 2>/dev/null &')
+    # Only auto-open if --open flag or no flag (first run)
+    if '--no-open' not in sys.argv:
+        import platform
+        if platform.system() == 'Darwin':
+            os.system(f'open -g "{out_file}"')
+        elif platform.system() == 'Linux':
+            os.system(f'xdg-open "{out_file}" 2>/dev/null &')
 
 
 if __name__ == "__main__":
