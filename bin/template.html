@@ -1672,22 +1672,35 @@ function renderView(fit){
   else if (S.view === 'flow') renderFlows(); else if (S.view === 'wiring') renderWiring(); else if (S.view === 'insights') renderInsights();
 }
 function renderAll(fit){ renderHeader(); renderSidebar(); renderView(fit); renderDetail(); }
-function rebuild(fit){
+async function rebuild(fit){
   const n = S.fmap.size;
-  if (n > 200) {
+  if (n > 150) {
+    busy(true, `Parsing ${n} files…`);
+    // Chunked parsing: parse files in batches, yield to browser for UI updates
+    const BATCH = 80;
+    const entries = [...S.fmap.entries()];
+    let parsed = 0;
+    for (let i = 0; i < entries.length; i += BATCH) {
+      const batch = entries.slice(i, i + BATCH);
+      for (const [p, o] of batch) {
+        if (!o.parsed) o.parsed = parseFile(p, o.text);
+      }
+      parsed += batch.length;
+      busy(true, `Parsing files… ${parsed}/${n}`);
+      await new Promise(r => setTimeout(r, 0)); // yield to browser
+    }
     busy(true, `Analyzing ${n} files…`);
-    // Use setTimeout to yield to browser between heavy steps
-    setTimeout(() => {
-      try {
-        S.P = analyze(S.fmap);
-        busy(true, 'Laying out map…');
-        setTimeout(() => {
-          layoutMap();
-          busy(true, 'Rendering…');
-          setTimeout(() => { renderAll(fit); busy(false); }, 16);
-        }, 16);
-      } catch(e) { busy(false); toast('Analysis error: ' + e.message); console.error(e); }
-    }, 30);
+    await new Promise(r => setTimeout(r, 16));
+    try {
+      S.P = analyze(S.fmap);
+      busy(true, 'Laying out map…');
+      await new Promise(r => setTimeout(r, 16));
+      layoutMap();
+      busy(true, 'Rendering…');
+      await new Promise(r => setTimeout(r, 16));
+      renderAll(fit);
+      busy(false);
+    } catch(e) { busy(false); toast('Analysis error: ' + e.message); console.error(e); }
   } else {
     S.P = analyze(S.fmap); layoutMap(); renderAll(fit);
   }
