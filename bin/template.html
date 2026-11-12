@@ -1566,15 +1566,35 @@ function renderInsights(){
         <div class="stack">${P.stack.length ? P.stack.map(s => `<span class="b" style="--bc:${LMAP[s.cat === 'mobile' ? 'ui' : s.cat]?.color || '#94a3b8'}">${esc(s.name)}</span>`).join('') : '<span style="color:var(--faint)">No known frameworks detected from manifests or imports.</span>'}</div></div></div>
     </div>
     ${(() => {
+      // Claude AI findings (loaded from findings.json)
+      const cf = S.claudeFindings || [];
+      let claudeHtml = '';
+      if (cf.length) {
+        const sevColor = {CRITICAL:'var(--bad)',HIGH:'var(--bad)',MED:'var(--warn)',MEDIUM:'var(--warn)',LOW:'var(--faint)',INFO:'var(--faint)'};
+        const sevOrder = {CRITICAL:0,HIGH:1,MED:2,MEDIUM:2,LOW:3,INFO:4};
+        const sorted = [...cf].sort((a,b) => (sevOrder[a.sev] ?? 5) - (sevOrder[b.sev] ?? 5));
+        const cHigh = cf.filter(f => f.sev === 'CRITICAL' || f.sev === 'HIGH').length;
+        const cMed = cf.filter(f => f.sev === 'MED' || f.sev === 'MEDIUM').length;
+        const cLow = cf.filter(f => f.sev === 'LOW' || f.sev === 'INFO').length;
+        const bc = cHigh ? 'var(--bad)' : cMed ? 'var(--warn)' : 'var(--ok)';
+        claudeHtml = `<div class="card" style="border-left:3px solid ${bc}"><header><h4>Claude AI Analysis</h4><span style="color:var(--muted);font-size:11px">${cf.length} finding${cf.length>1?'s':''} · ${cHigh} critical/high · ${cMed} medium · ${cLow} low/info</span></header>
+          <div class="tbl-wrap"><table><thead><tr><th style="width:70px">Severity</th><th>File</th><th>Issue</th><th>Fix</th></tr></thead><tbody>
+          ${sorted.map(f => `<tr${f.file ? ' class="click" data-goto="' + esc(f.file.split(':')[0]) + '"' : ''}><td><span class="pill sev" style="background:${sevColor[f.sev] || 'var(--faint)'};color:#fff;font-size:9px">${esc(f.sev)}</span></td><td class="mono" style="font-size:11px;white-space:nowrap">${esc(f.file || '')}</td><td>${esc(f.issue || '')}</td><td style="color:var(--muted);font-size:12px">${esc(f.fix || '')}</td></tr>`).join('')}
+          </tbody></table></div></div>`;
+      }
+      // Built-in regex scan
       const vulns = P.issues.filter(i => i.kind === 'vuln');
-      if (!vulns.length) return '';
-      const cats = new Map();
-      for (const v of vulns) { const cat = v.title.replace(/ in .+$/, ''); cats.set(cat, (cats.get(cat) || 0) + 1); }
-      const vhigh = vulns.filter(v => v.sev === 'high').length, vmed = vulns.filter(v => v.sev === 'med').length, vlow = vulns.filter(v => v.sev === 'low').length;
-      const vc = vhigh ? 'var(--bad)' : vmed ? 'var(--warn)' : 'var(--ok)';
-      return `<div class="card" style="border-left:3px solid ${vc}"><header><h4>Security Scan</h4><span style="color:var(--muted);font-size:11px">${vulns.length} finding${vulns.length > 1 ? 's' : ''} · ${vhigh} critical · ${vmed} warning · ${vlow} info</span></header>
-        <div class="bd"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${[...cats].sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<span class="b" style="--bc:${c.includes('injection')||c.includes('XSS')||c.includes('command')||c.includes('credential')||c.includes('Key')?'var(--bad)':'var(--warn)'}">${esc(c)} (${n})</span>`).join('')}</div>
-        <div class="rows">${vulns.slice(0,20).map(v=>`<div class="r"><span class="pill sev ${v.sev}" style="font-size:9px">${v.sev==='high'?'CRIT':v.sev==='med'?'WARN':'INFO'}</span><span class="t click" data-goto="${esc(v.files[0])}">${esc(v.title)}</span></div>`).join('')}${vulns.length > 20 ? `<div class="r"><span class="t" style="color:var(--faint)">+${vulns.length - 20} more findings in Issues below</span></div>` : ''}</div></div></div>`;
+      let regexHtml = '';
+      if (vulns.length) {
+        const cats = new Map();
+        for (const v of vulns) { const cat = v.title.replace(/ in .+$/, ''); cats.set(cat, (cats.get(cat) || 0) + 1); }
+        const vhigh = vulns.filter(v => v.sev === 'high').length, vmed = vulns.filter(v => v.sev === 'med').length, vlow = vulns.filter(v => v.sev === 'low').length;
+        const vc = vhigh ? 'var(--bad)' : vmed ? 'var(--warn)' : 'var(--ok)';
+        regexHtml = `<div class="card" style="border-left:3px solid ${vc}"><header><h4>Pattern Scanner</h4><span style="color:var(--muted);font-size:11px">${vulns.length} finding${vulns.length > 1 ? 's' : ''} · ${vhigh} critical · ${vmed} warning · ${vlow} info</span></header>
+          <div class="bd"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${[...cats].sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<span class="b" style="--bc:${c.includes('injection')||c.includes('XSS')||c.includes('command')||c.includes('credential')||c.includes('Key')?'var(--bad)':'var(--warn)'}">${esc(c)} (${n})</span>`).join('')}</div>
+          <div class="rows">${vulns.slice(0,20).map(v=>`<div class="r"><span class="pill sev ${v.sev}" style="font-size:9px">${v.sev==='high'?'CRIT':v.sev==='med'?'WARN':'INFO'}</span><span class="t click" data-goto="${esc(v.files[0])}">${esc(v.title)}</span><span class="ln" style="white-space:nowrap">${esc(v.detail.match(/Line [\d, ]+/) ? v.detail.match(/Line [\d, ]+/)[0] : '')}</span></div>`).join('')}${vulns.length > 20 ? `<div class="r"><span class="t" style="color:var(--faint)">+${vulns.length - 20} more</span></div>` : ''}</div></div></div>`;
+      }
+      return claudeHtml + regexHtml;
     })()}
     <div class="card"><header><h4>Issues</h4><div class="seg">${['all', 'high', 'med', 'low'].map(s => `<button class="btn sm${S.sev === s ? ' on' : ''}" data-sev="${s}">${s === 'all' ? 'All ' + P.issues.length : sevName[s] + ' ' + counts[s]}</button>`).join('')}</div></header>
       ${list.length ? list.map(i => `<div class="iss"><span class="pill sev ${i.sev}">${sevName[i.sev]}</span><div style="min-width:0"><b>${esc(i.title)}</b><p>${esc(i.detail)}</p><div class="files">${i.files.slice(0, 12).map(p => `<span class="fl" data-goto="${esc(p)}">${esc(base(p))}</span>`).join('')}${i.files.length > 12 ? `<span class="fl">+${i.files.length - 12}</span>` : ''}</div></div>${i.files.length > 1 && i.kind !== 'tests' ? `<button class="btn sm" data-showset="${P.issues.indexOf(i)}">Show</button>` : '<span></span>'}</div>`).join('') : '<div class="empty">Nothing here. Nice.</div>'}</div>
@@ -1855,8 +1875,28 @@ async function loadPreloadData() {
   await new Promise(r => setTimeout(r, 50));
   await rebuild(true);
   toast('Loaded ' + S.fmap.size + ' files.');
+  // Try loading Claude AI findings
+  loadFindings();
   return true;
 }
+async function loadFindings() {
+  try {
+    const resp = await fetch('findings.json');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (Array.isArray(data) && data.length) {
+      S.claudeFindings = data;
+      if (S.view === 'insights') renderInsights();
+      toast('Loaded ' + data.length + ' Claude AI findings.');
+    }
+  } catch(e) { /* findings.json not available yet — normal on first load */ }
+}
+// Also check for findings.json periodically (Claude writes it after HTML opens)
+let _findingsCheck = 0;
+const _findingsTimer = setInterval(async () => {
+  if (S.claudeFindings && S.claudeFindings.length || ++_findingsCheck > 20) { clearInterval(_findingsTimer); return; }
+  await loadFindings();
+}, 3000);
 if (typeof _FLOWMAP_COMPRESSED !== 'undefined' || typeof _FLOWMAP_PRELOAD !== 'undefined') {
   loadPreloadData();
 } else {

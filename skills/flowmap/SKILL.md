@@ -54,18 +54,32 @@ Grep: "CORS|cors.*origin.*\*|verify.*False|rejectUnauthorized.*false" (Misconfig
 - **Logic Bugs**: unchecked return values, race conditions, missing null checks, infinite loops
 - **Error Handling**: bare except/catch, swallowed errors, missing error responses
 
-**3c. Output Security Report**:
+**3c. Write findings.json** — MUST write findings to `<project>/flowmap-out/findings.json` so the HTML page can display them. Format:
+```json
+[
+  {"sev": "CRITICAL", "file": "api/auth.py:45", "issue": "SQL injection — user input concatenated into query", "fix": "Use parameterized query"},
+  {"sev": "HIGH", "file": "utils/file.py:23", "issue": "Path traversal — request param in open()", "fix": "Validate with os.path.realpath()"},
+  {"sev": "MED", "file": "settings.py:12", "issue": "DEBUG=True in non-dev config", "fix": "Set DEBUG=False or use env var"}
+]
+```
+Valid sev values: CRITICAL, HIGH, MED, LOW, INFO
+
+Write the file using the Write tool:
+```
+Write to: <resolved_path>/flowmap-out/findings.json
+```
+
+**3d. Output Security Report** in terminal too:
 ```
 ## Security & Bug Report
 
 | Sev | File:Line | Issue | Fix |
 |-----|-----------|-------|-----|
-| CRITICAL | api/auth.py:45 | SQL injection — user input concatenated into query | Use parameterized query: `cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))` |
-| HIGH | utils/file.py:23 | Path traversal — request param used in open() | Validate path with `os.path.realpath()` and check it's within allowed directory |
-| MED | settings.py:12 | DEBUG=True in non-dev config | Set DEBUG=False or use environment variable |
 ```
 
-If no issues found: "No vulnerabilities detected in analyzed files."
+If no issues found: write `[]` to findings.json and say "No vulnerabilities detected."
+
+The HTML page auto-loads findings.json and shows them in the Insights tab under "Claude AI Analysis" — a styled table with severity, file, issue, fix columns.
 
 ### Step 4: Report result
 Tell user:
