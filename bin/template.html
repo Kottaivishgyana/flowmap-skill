@@ -1469,7 +1469,23 @@ function renderDetail(){
     <div class="note">${purpose(n)}</div>
     <div class="kv"><div><b>${fmt(n.loc)}</b><span>Lines</span></div><div><b>${n.fanIn}</b><span>Used by</span></div><div><b>${n.fanOut}</b><span>Uses</span></div></div>
     <div class="note ${im.dist.size > 5 ? 'warn' : ''}">Changing <b>${esc(n.name)}</b> can affect <b>${im.dist.size}</b> file${im.dist.size === 1 ? '' : 's'} and <b>${im.flows.length}</b> flow${im.flows.length === 1 ? '' : 's'}.</div>
-    ${n.issues.length ? `<div class="sec"><h5>Issues & Vulnerabilities <em>${n.issues.length}</em></h5>${n.issues.map(i => `<div class="note ${i.sev === 'high' ? 'bad' : i.sev === 'med' ? 'warn' : ''}"><span class="pill sev ${i.sev}" style="font-size:9px;vertical-align:1px;margin-right:6px">${i.sev === 'high' ? 'CRITICAL' : i.sev === 'med' ? 'WARNING' : 'INFO'}</span><b>${esc(i.title)}</b><br><span style="color:var(--muted);font-size:12px">${esc(i.detail)}</span>${i.kind === 'vuln' ? '<br><span style="color:var(--accent);font-size:11px;cursor:pointer" data-showset="' + S.P.issues.indexOf(i) + '">Show on map →</span>' : ''}</div>`).join('')}</div>` : ''}
+    ${(() => {
+      const cf = (S.claudeFindings || []).filter(f => f.file && f.file.split(':')[0] === n.path || f.file && n.path.endsWith(f.file.split(':')[0]));
+      const ri = n.issues;
+      let html = '';
+      if (cf.length) {
+        const sevColor = {CRITICAL:'#ef4444',HIGH:'#ef4444',MED:'#f59e0b',MEDIUM:'#f59e0b',LOW:'#64748b',INFO:'#64748b'};
+        html += '<div class="sec"><h5>Claude AI Findings <em>' + cf.length + '</em></h5>';
+        html += cf.map(f => '<div class="note ' + (/CRITICAL|HIGH/.test(f.sev) ? 'bad' : /MED/.test(f.sev) ? 'warn' : '') + '"><span class="pill sev" style="background:' + (sevColor[f.sev]||'#64748b') + ';color:#fff;font-size:9px;margin-right:6px">' + esc(f.sev) + '</span><b>' + esc(f.issue) + '</b><br><span style="color:var(--muted);font-size:12px">' + esc(f.fix || '') + '</span></div>').join('');
+        html += '</div>';
+      }
+      if (ri.length) {
+        html += '<div class="sec"><h5>Issues <em>' + ri.length + '</em></h5>';
+        html += ri.map(i => '<div class="note ' + (i.sev === 'high' ? 'bad' : i.sev === 'med' ? 'warn' : '') + '"><span class="pill sev ' + i.sev + '" style="font-size:9px;vertical-align:1px;margin-right:6px">' + (i.sev === 'high' ? 'CRITICAL' : i.sev === 'med' ? 'WARNING' : 'INFO') + '</span><b>' + esc(i.title) + '</b><br><span style="color:var(--muted);font-size:12px">' + esc(i.detail) + '</span></div>').join('');
+        html += '</div>';
+      }
+      return html;
+    })()}
     <div class="acts"><button class="btn sm" data-pathfrom>Trace path from here</button><button class="btn sm${hl && hl.kind === 'impact' ? ' on' : ''}" data-impact>Show impact</button><button class="btn sm" data-center>Center</button><button class="btn sm" data-copy>Copy path</button></div>
     ${routes.length ? `<div class="sec"><h5>Endpoints <em>${n.fullRoutes.length}</em></h5><div class="rows">${routes.join('')}</div></div>` : ''}
     ${calls.length ? `<div class="sec"><h5>Calls the backend <em>${calls.length}</em></h5><div class="rows">${calls.join('')}</div></div>` : ''}
@@ -1875,28 +1891,13 @@ async function loadPreloadData() {
   await new Promise(r => setTimeout(r, 50));
   await rebuild(true);
   toast('Loaded ' + S.fmap.size + ' files.');
-  // Try loading Claude AI findings
-  loadFindings();
+  // Load Claude AI findings if injected
+  if (typeof _FLOWMAP_FINDINGS !== 'undefined' && Array.isArray(_FLOWMAP_FINDINGS) && _FLOWMAP_FINDINGS.length) {
+    S.claudeFindings = _FLOWMAP_FINDINGS;
+    if (S.view === 'insights') renderInsights();
+  }
   return true;
 }
-async function loadFindings() {
-  try {
-    const resp = await fetch('findings.json');
-    if (!resp.ok) return;
-    const data = await resp.json();
-    if (Array.isArray(data) && data.length) {
-      S.claudeFindings = data;
-      if (S.view === 'insights') renderInsights();
-      toast('Loaded ' + data.length + ' Claude AI findings.');
-    }
-  } catch(e) { /* findings.json not available yet — normal on first load */ }
-}
-// Also check for findings.json periodically (Claude writes it after HTML opens)
-let _findingsCheck = 0;
-const _findingsTimer = setInterval(async () => {
-  if (S.claudeFindings && S.claudeFindings.length || ++_findingsCheck > 20) { clearInterval(_findingsTimer); return; }
-  await loadFindings();
-}, 3000);
 if (typeof _FLOWMAP_COMPRESSED !== 'undefined' || typeof _FLOWMAP_PRELOAD !== 'undefined') {
   loadPreloadData();
 } else {
@@ -1909,5 +1910,5 @@ if (typeof _FLOWMAP_COMPRESSED !== 'undefined' || typeof _FLOWMAP_PRELOAD !== 'u
 })();
 
 </script>
-
+<!-- FLOWMAP_FINDINGS_INJECT -->
 </body></html>

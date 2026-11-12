@@ -54,20 +54,25 @@ Grep: "CORS|cors.*origin.*\*|verify.*False|rejectUnauthorized.*false" (Misconfig
 - **Logic Bugs**: unchecked return values, race conditions, missing null checks, infinite loops
 - **Error Handling**: bare except/catch, swallowed errors, missing error responses
 
-**3c. Write findings.json** — MUST write findings to `<project>/flowmap-out/findings.json` so the HTML page can display them. Format:
-```json
-[
-  {"sev": "CRITICAL", "file": "api/auth.py:45", "issue": "SQL injection — user input concatenated into query", "fix": "Use parameterized query"},
-  {"sev": "HIGH", "file": "utils/file.py:23", "issue": "Path traversal — request param in open()", "fix": "Validate with os.path.realpath()"},
-  {"sev": "MED", "file": "settings.py:12", "issue": "DEBUG=True in non-dev config", "fix": "Set DEBUG=False or use env var"}
-]
-```
-Valid sev values: CRITICAL, HIGH, MED, LOW, INFO
+**3c. Inject findings into HTML** — MUST inject findings directly into the generated HTML file so they display in the browser. Use the Edit tool on `<resolved_path>/flowmap-out/index.html`:
 
-Write the file using the Write tool:
+Replace this exact string:
 ```
-Write to: <resolved_path>/flowmap-out/findings.json
+<!-- FLOWMAP_FINDINGS_INJECT -->
 ```
+With a script tag containing the findings array:
+```
+<script>const _FLOWMAP_FINDINGS = [
+  {"sev":"CRITICAL","file":"api/auth.py:45","issue":"SQL injection — user input concatenated into query","fix":"Use parameterized query"},
+  {"sev":"HIGH","file":"utils/file.py:23","issue":"Path traversal — request param in open()","fix":"Validate with os.path.realpath()"},
+  {"sev":"MED","file":"settings.py:12","issue":"DEBUG=True in non-dev config","fix":"Set DEBUG=False or use env var"}
+];</script>
+<!-- FLOWMAP_FINDINGS_INJECT -->
+```
+
+**IMPORTANT**: Keep the `<!-- FLOWMAP_FINDINGS_INJECT -->` marker after the script tag.
+Valid sev values: CRITICAL, HIGH, MED, LOW, INFO
+The `file` field should be the relative path with optional `:line` suffix.
 
 **3d. Output Security Report** in terminal too:
 ```
@@ -77,9 +82,11 @@ Write to: <resolved_path>/flowmap-out/findings.json
 |-----|-----------|-------|-----|
 ```
 
-If no issues found: write `[]` to findings.json and say "No vulnerabilities detected."
+If no issues found: inject empty array `const _FLOWMAP_FINDINGS = [];` and say "No vulnerabilities detected."
 
-The HTML page auto-loads findings.json and shows them in the Insights tab under "Claude AI Analysis" — a styled table with severity, file, issue, fix columns.
+The HTML page reads `_FLOWMAP_FINDINGS` and shows:
+- **Insights tab**: "Claude AI Analysis" card with severity/file/issue/fix table
+- **Detail panel**: When user clicks a file, Claude findings for that file show in the right panel
 
 ### Step 4: Report result
 Tell user:
