@@ -20,7 +20,10 @@ Project architecture visualizer + security analyzer. Finds project folder, scans
 ```bash
 python3 ~/.claude/skills/flowmap/bin/flowmap.py <resolved_path>
 ```
-This reads all source files, compresses into HTML template, and auto-opens in browser.
+Then open in browser (ONE time only — do NOT open twice):
+```bash
+open <resolved_path>/flowmap-out/index.html
+```
 
 ### Step 3: Claude vulnerability & bug analysis (MANDATORY)
 After HTML generation, Claude MUST analyze the project for real bugs and vulnerabilities.
