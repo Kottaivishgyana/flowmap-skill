@@ -354,10 +354,10 @@ textarea.out{width:100%;height:46vh;border:0;border-top:1px solid var(--line);pa
     <aside class="detail" id="detail" aria-label="Details"></aside>
   </div>
 </div>
-<input type="file" id="dirInput" webkitdirectory directory multiple hidden>
+<!-- CLI-only: no folder picker -->
 <div class="modal-bg" id="palBg" hidden><div class="modal" role="dialog" aria-label="Command palette"><input class="pal-in" id="palIn" placeholder="Jump to a file, route, flow, view or action…" autocomplete="off"><div class="pal-list" id="palList"></div><div class="pal-foot"><span><kbd>1</kbd>–<kbd>5</kbd> views</span><span><kbd>/</kbd> search</span><span><kbd>F</kbd> fit</span><span><kbd>P</kbd> path</span><span><kbd>I</kbd> impact</span><span><kbd>D</kbd> details</span><span><kbd>L</kbd> live</span><span><kbd>T</kbd> theme</span><span><kbd>Esc</kbd> clear</span></div></div></div>
 <div class="modal-bg" id="expBg" hidden><div class="modal" role="dialog" aria-label="Export"><header><h4>Export</h4><div class="seg" id="expSeg"><button class="btn sm on" data-f="md">Markdown report</button><button class="btn sm" data-f="json">Graph JSON</button><button class="btn sm" data-f="mermaid">Mermaid</button></div><button class="btn sm primary" id="copyBtn">Copy</button><button class="dp-x" id="expX" aria-label="Close">×</button></header><textarea class="out" id="expOut" readonly></textarea></div></div>
-<div class="drop" id="drop" hidden>Drop a project folder to map it</div>
+<!-- CLI-only mode -->
 <div class="busy" id="busy" hidden><div id="busyText">Scanning…</div></div>
 <div class="toast" id="toast" hidden></div>
 
@@ -952,7 +952,7 @@ const LMAP = Object.fromEntries(LAYERS.map(l => [l.id, l]));
 const KCOL = {UI:'#eab308', HTTP:'#06b6d4', API:'#3b82f6', LOGIC:'#8b5cf6', DATA:'#22c55e', EVENT:'#ef4444', EXT:'#f97316', CONFIG:'#64748b', TEST:'#06b6d4', DOC:'#94a3b8'};
 const MCOL = {GET:'#22c55e', POST:'#3b82f6', PUT:'#f59e0b', PATCH:'#f59e0b', DELETE:'#ef4444', ANY:'#94a3b8', ALL:'#94a3b8', RPC:'#8b5cf6'};
 const ETYPES = [{id:'import', label:'Imports', color:'#94a3b8'}, {id:'http', label:'HTTP calls', color:'#3b82f6', dash:1}, {id:'event', label:'Events', color:'#ef4444', dash:1}, {id:'data', label:'Data access', color:'#22c55e', dash:1}];
-const VIEWS = [['overview','Overview'], ['flow','Flow'], ['wiring','Wiring'], ['insights','Insights'], ['live','Live']];
+const VIEWS = [['overview','Overview'], ['flow','Flow'], ['wiring','Wiring'], ['insights','Insights']];
 const W = 216, H = 66;
 
 const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -1029,20 +1029,7 @@ function readEntry(entry, prefix, out){
     else res();
   });
 }
-let dragN = 0;
-document.addEventListener('dragenter', e => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { dragN++; $('#drop').hidden = false; } });
-document.addEventListener('dragleave', () => { if (--dragN <= 0) { dragN = 0; $('#drop').hidden = true; } });
-document.addEventListener('dragover', e => e.preventDefault());
-document.addEventListener('drop', async e => {
-  e.preventDefault(); dragN = 0; $('#drop').hidden = true;
-  const items = [...e.dataTransfer.items].filter(i => i.kind === 'file');
-  const hp = items.map(i => i.getAsFileSystemHandle ? i.getAsFileSystemHandle().catch(() => null) : null);
-  const entries = items.map(i => i.webkitGetAsEntry && i.webkitGetAsEntry());
-  try { const h = await hp[0]; if (h && h.kind === 'directory') return loadFromHandle(h); } catch {}
-  const out = []; let name = null;
-  for (const en of entries) if (en) { if (en.isDirectory) name = name || en.name; await readEntry(en, '', out); }
-  filesToMap(out, name, 'snapshot');
-});
+/* drag-drop disabled — CLI-only mode */
 
 /* ---------- realtime: watch + simulate ---------- */
 function startWatch(){ stopWatch(); if (!S.live.handle) return; S.live.startHealth = S.P.health; S.live.timer = setInterval(pollHandle, S.live.interval); renderHeader(); }
@@ -1165,6 +1152,7 @@ function matches(n, q){
   return n.fullRoutes.some(r => r.full.toLowerCase().includes(q) || (r.handler || '').toLowerCase().includes(q)) || n.models.some(m => m.name.toLowerCase().includes(q)) || n.envs.some(e => e.toLowerCase().includes(q)) || n.calls.some(c => c.url.toLowerCase().includes(q));
 }
 function badgeFor(n){
+  if (n.secrets.length) return [`${n.secrets.length} vuln`, '#ef4444', 'vulnerabilities'];
   if (n.layer === 'api' && n.fullRoutes.length) return [`${n.fullRoutes.length}`, '#3b82f6', 'endpoints'];
   if (n.layer === 'ui' && n.calls.length) return [`${n.calls.length}`, '#eab308', 'API calls'];
   if (n.layer === 'data' && n.models.length) return [`${n.models.length}`, '#22c55e', 'models'];
@@ -1489,7 +1477,7 @@ function renderDetail(){
     <div class="note">${purpose(n)}</div>
     <div class="kv"><div><b>${fmt(n.loc)}</b><span>Lines</span></div><div><b>${n.fanIn}</b><span>Used by</span></div><div><b>${n.fanOut}</b><span>Uses</span></div></div>
     <div class="note ${im.dist.size > 5 ? 'warn' : ''}">Changing <b>${esc(n.name)}</b> can affect <b>${im.dist.size}</b> file${im.dist.size === 1 ? '' : 's'} and <b>${im.flows.length}</b> flow${im.flows.length === 1 ? '' : 's'}.</div>
-    ${n.issues.map(i => `<div class="note ${i.sev === 'high' ? 'bad' : 'warn'}"><b>${esc(i.title)}</b><br>${esc(i.detail)}</div>`).join('')}
+    ${n.issues.length ? `<div class="sec"><h5>Issues & Vulnerabilities <em>${n.issues.length}</em></h5>${n.issues.map(i => `<div class="note ${i.sev === 'high' ? 'bad' : i.sev === 'med' ? 'warn' : ''}"><span class="pill sev ${i.sev}" style="font-size:9px;vertical-align:1px;margin-right:6px">${i.sev === 'high' ? 'CRITICAL' : i.sev === 'med' ? 'WARNING' : 'INFO'}</span><b>${esc(i.title)}</b><br><span style="color:var(--muted);font-size:12px">${esc(i.detail)}</span>${i.kind === 'vuln' ? '<br><span style="color:var(--accent);font-size:11px;cursor:pointer" data-showset="' + S.P.issues.indexOf(i) + '">Show on map →</span>' : ''}</div>`).join('')}</div>` : ''}
     <div class="acts"><button class="btn sm" data-pathfrom>Trace path from here</button><button class="btn sm${hl && hl.kind === 'impact' ? ' on' : ''}" data-impact>Show impact</button><button class="btn sm" data-center>Center</button><button class="btn sm" data-copy>Copy path</button></div>
     ${routes.length ? `<div class="sec"><h5>Endpoints <em>${n.fullRoutes.length}</em></h5><div class="rows">${routes.join('')}</div></div>` : ''}
     ${calls.length ? `<div class="sec"><h5>Calls the backend <em>${calls.length}</em></h5><div class="rows">${calls.join('')}</div></div>` : ''}
@@ -1500,6 +1488,7 @@ function renderDetail(){
     <div class="sec"><h5>Used by <em>${usedBy.length}</em></h5>${rowsHTML(usedBy, 'Nothing in the project uses this file.')}</div>
     <div class="sec"><h5>Imports <em>${imports.length}</em></h5>${rowsHTML(imports, 'No imports of other project files.')}</div>
     ${n.envs.length ? `<div class="sec"><h5>Environment variables</h5><div class="rows">${n.envs.map(v => `<div class="r"><span class="t">${esc(v)}</span></div>`).join('')}</div></div>` : ''}
+    ${n.secrets.length ? `<div class="sec"><h5>Security Findings <em>${n.secrets.length}</em></h5><div class="rows">${n.secrets.map(s => `<div class="r"><span class="meth" style="--mc:${s.sev === 'high' || !s.sev ? '#ef4444' : s.sev === 'med' ? '#f59e0b' : '#64748b'}">${(s.sev || 'HIGH').toUpperCase()}</span><span class="t" title="${esc(s.kind)}">${esc(s.kind)}</span><span class="ln">:${s.line}</span></div>`).join('')}</div></div>` : ''}
     ${n.todos.length ? `<div class="sec"><h5>TODO / FIXME <em>${n.todos.length}</em></h5><div class="rows">${n.todos.map(t => `<div class="r"><span class="meth" style="--mc:#f59e0b">${t.kind}</span><span class="t" title="${esc(t.text)}">${esc(t.text || '—')}</span><span class="ln">:${t.line}</span></div>`).join('')}</div></div>` : ''}
   </div>`;
 }
@@ -1688,7 +1677,7 @@ function go(v){
 }
 function renderView(fit){
   if (S.view === 'overview') { renderMap(true); if (fit || !S.fitted) { S.fitted = true; requestAnimationFrame(fitView); } }
-  else if (S.view === 'flow') renderFlows(); else if (S.view === 'wiring') renderWiring(); else if (S.view === 'insights') renderInsights(); else renderLive();
+  else if (S.view === 'flow') renderFlows(); else if (S.view === 'wiring') renderWiring(); else if (S.view === 'insights') renderInsights();
 }
 function renderAll(fit){ renderHeader(); renderSidebar(); renderView(fit); renderDetail(); }
 function rebuild(fit){
@@ -1726,16 +1715,12 @@ let qT; $('#q').addEventListener('input', e => { clearTimeout(qT); qT = setTimeo
 function closeMenu(){ $('#projMenu').hidden = true; }
 $('#projBtn').addEventListener('click', e => {
   e.stopPropagation(); const m = $('#projMenu'); if (!m.hidden) return closeMenu();
-  m.innerHTML = `<div class="cap">Your code</div>
-    <button class="mi" data-m="live"><span class="tile" style="--lc:#22c55e">LIVE</span><div><b>Watch a folder live</b><small>Chrome and Edge. Updates as you save files.</small></div></button>
-    <button class="mi" data-m="upload"><span class="tile" style="--lc:#3b82f6">DIR</span><div><b>Upload a folder</b><small>One-time snapshot, any browser. Or drag a folder onto the page.</small></div></button>
-    <hr><div class="cap">Sample projects</div>
-    ${Object.entries(DEMOS).map(([k, d]) => `<button class="mi" data-m="demo:${k}"><span class="tile" style="--lc:${k === S.demoKey && S.source === 'demo' ? '#06b6d4' : '#64748b'}">${d.name.slice(0, 3).toUpperCase()}</span><div><b>${esc(d.name)}</b><small>${esc(d.industry)} · ${esc(d.stack)}</small></div></button>`).join('')}
-    <hr><div class="cap" style="text-transform:none;letter-spacing:0">Reads JS/TS, Python, Go, Java, Kotlin, C#, PHP, Ruby, Rust, Dart and more. Files never leave your browser.</div>`;
+  m.innerHTML = `<div class="cap">Project: ${esc(S.name)}</div>
+    <div class="cap" style="text-transform:none;letter-spacing:0;padding:8px 12px">Run <code>/flowmap &lt;project&gt;</code> from Claude Code to scan a project.<br><br>Reads JS/TS, Python, Go, Java, Kotlin, C#, PHP, Ruby, Rust, Dart and more.</div>`;
   m.hidden = false;
 });
 $('#projMenu').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; const a = b.dataset.m; closeMenu();
-  if (a === 'live') openLive(); else if (a === 'upload') $('#dirInput').click();  });
+  });
 document.addEventListener('click', e => { if (!e.target.closest('#projMenu') && !e.target.closest('#projBtn')) closeMenu(); });
 
 function themeToggle(){ const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'); const nx = cur === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = nx; store.set('fm-theme', nx); drawMini(); }
@@ -1745,9 +1730,8 @@ function palItems(){
   const P = S.P, it = [];
   VIEWS.forEach(([id, l], i) => it.push({g:'View', t:l, k:String(i + 1), run:() => go(id)}));
   it.push({g:'Action', t:'Fit map to screen', k:'F', run:() => { go('overview'); fitView(); }}, {g:'Action', t:'Path tracer', k:'P', run:() => setMode('path')}, {g:'Action', t:'Impact analysis', k:'I', run:() => setMode('impact')},
-    {g:'Action', t:'Switch theme', k:'T', run:themeToggle}, {g:'Action', t:'Export report', k:'E', run:openExport}, {g:'Action', t:'Watch a folder live', run:openLive}, {g:'Action', t:'Upload a folder', run:() => $('#dirInput').click()},
-    {g:'Action', t:S.live.sim ? 'Stop simulated edits' : 'Simulate live edits', k:'L', run:() => { S.live.sim ? stopSim() : startSim(); renderHeader(); if (S.view === 'live') renderLive(); }});
-  Object.entries(DEMOS).forEach(([k, d]) => it.push({g:'Sample', t:`${d.name} — ${d.industry}`, run:() => loadDemo(k)}));
+    {g:'Action', t:'Switch theme', k:'T', run:themeToggle}, {g:'Action', t:'Export report', k:'E', run:openExport});
+  // CLI-only — no demo loading
   P.flows.forEach(f => it.push({g:'Flow', t:f.title, run:() => { S.flowQ = ''; go('flow'); }}));
   P.routes.forEach(r => it.push({g:'Route', t:`${r.method} ${r.full}`, s:base(r.file), run:() => selectFile(r.file)}));
   P.nodes.forEach(n => it.push({g:'File', t:n.name, s:n.dir, run:() => selectFile(n.path)}));
@@ -1880,10 +1864,11 @@ async function loadPreloadData() {
 if (typeof _FLOWMAP_COMPRESSED !== 'undefined' || typeof _FLOWMAP_PRELOAD !== 'undefined') {
   loadPreloadData();
 } else {
-  // No data — show empty state, user can drag-drop or use folder picker
+  // No data — CLI-only mode, show message
   Object.assign(S, {name: 'Flowmap', source: 'snapshot', sel: null});
   S.P = analyze(S.fmap); layoutMap();
   renderAll(true);
+  toast('Run /flowmap <project> from Claude Code to load a project.');
 }
 })();
 

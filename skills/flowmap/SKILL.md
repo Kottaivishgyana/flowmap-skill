@@ -1,6 +1,6 @@
 # flowmap
 
-Project architecture visualizer. Finds project folder, scans all files, generates interactive HTML map.
+Project architecture visualizer + security analyzer. Finds project folder, scans all files, generates interactive HTML map, then Claude analyzes for vulnerabilities.
 
 ## Trigger
 `/flowmap` or `/flowmap <name_or_path>`
@@ -20,48 +20,68 @@ Project architecture visualizer. Finds project folder, scans all files, generate
 ```bash
 python3 ~/.claude/skills/flowmap/bin/flowmap.py <resolved_path>
 ```
-This reads all source files, injects them into the HTML template, and auto-opens in browser.
+This reads all source files, compresses into HTML template, and auto-opens in browser.
 
-### Step 3: Claude security analysis (uses tokens)
-After generation, do a **real vulnerability analysis** using Claude's understanding:
-1. Read the **API/route files** (files with routes, endpoints, controllers) — max 5 files
-2. Read **files handling user input** (forms, request handlers, auth) — max 5 files
-3. Read **data layer files** (models, DB queries, ORM usage) — max 3 files
-4. For each file read, check for:
-   - **Injection**: SQL injection, NoSQL injection, command injection, LDAP injection
-   - **Broken auth**: hardcoded credentials, weak password handling, missing auth checks
-   - **XSS**: unescaped output, innerHTML, template injection
-   - **Insecure deserialization**: pickle, eval, yaml.load, ObjectInputStream
-   - **SSRF**: user-controlled URLs in server-side requests
-   - **Path traversal**: user input in file operations
-   - **Broken access control**: missing permission checks, IDOR patterns
-   - **Security misconfig**: debug mode, CORS *, disabled SSL verify, verbose errors
-   - **Sensitive data exposure**: secrets in code, logging PII, missing encryption
-5. Output a **Security Report** table:
-   ```
-   | Severity | File:Line | Vulnerability | Fix |
-   |----------|-----------|--------------|-----|
-   | CRITICAL | auth.py:45 | SQL injection in login query | Use parameterized query |
-   ```
-6. If no issues found, say "No vulnerabilities detected in sampled files."
+### Step 3: Claude vulnerability & bug analysis (MANDATORY)
+After HTML generation, Claude MUST analyze the project for real bugs and vulnerabilities.
 
-**File selection heuristic**: Prioritize files named `auth`, `login`, `api`, `routes`, `views`, `controllers`, `middleware`, `db`, `queries`, `admin`. Use Grep to find files with `req.body`, `request.form`, `cursor.execute`, `.query(`, `eval(`, `exec(` etc.
+**3a. Find high-risk files** — Run these Grep searches in parallel on the project:
+```
+Grep: "cursor\.execute|\.query\(|\.raw\(|\.extra\(" (SQL)
+Grep: "innerHTML|dangerouslySetInnerHTML|document\.write|\.html\(" (XSS)
+Grep: "exec\(|eval\(|os\.system|subprocess|child_process|spawn" (Command injection)
+Grep: "pickle\.load|yaml\.load|ObjectInputStream|deserialize" (Deserialization)
+Grep: "password|secret|api_key|token.*=.*['\"]" (Hardcoded secrets)
+Grep: "open\(.*request|readFile.*req|sendFile.*param" (Path traversal)
+Grep: "redirect\(.*req|location.*=.*req" (Open redirect)
+Grep: "CORS|cors.*origin.*\*|verify.*False|rejectUnauthorized.*false" (Misconfig)
+```
+
+**3b. Read and analyze** — Read the top 8-10 files that matched above. For each file, check for:
+- **SQL Injection**: string concatenation in queries, f-strings in SQL, unsanitized user input
+- **XSS**: user data rendered without escaping, innerHTML with dynamic content
+- **Command Injection**: user input in shell commands, os.system with variables
+- **Broken Authentication**: hardcoded passwords, weak token generation, missing auth middleware
+- **Insecure Deserialization**: pickle on untrusted data, yaml.unsafe_load, eval of user input
+- **SSRF**: user-controlled URLs in fetch/requests/http calls
+- **Path Traversal**: user input in file paths without sanitization
+- **Broken Access Control**: missing permission decorators, IDOR patterns, admin without auth
+- **Security Misconfig**: DEBUG=True in prod, CORS *, SSL verify disabled, verbose error pages
+- **Sensitive Data Exposure**: secrets in code, PII logged, missing encryption
+- **Logic Bugs**: unchecked return values, race conditions, missing null checks, infinite loops
+- **Error Handling**: bare except/catch, swallowed errors, missing error responses
+
+**3c. Output Security Report**:
+```
+## Security & Bug Report
+
+| Sev | File:Line | Issue | Fix |
+|-----|-----------|-------|-----|
+| CRITICAL | api/auth.py:45 | SQL injection — user input concatenated into query | Use parameterized query: `cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))` |
+| HIGH | utils/file.py:23 | Path traversal — request param used in open() | Validate path with `os.path.realpath()` and check it's within allowed directory |
+| MED | settings.py:12 | DEBUG=True in non-dev config | Set DEBUG=False or use environment variable |
+```
+
+If no issues found: "No vulnerabilities detected in analyzed files."
 
 ### Step 4: Report result
-Tell user: files scanned, output path, that it's open in browser. Include the security report.
+Tell user:
+1. Files scanned count, output path, browser opened
+2. The security report table from Step 3
+3. Health score from the HTML (if visible in terminal output)
 
 ## Examples
 ```
-/flowmap                    → scan current working directory
+/flowmap                    → scan current directory
 /flowmap martram            → find "martram" folder, scan it
 /flowmap /path/to/project   → scan exact path
 ```
 
 ## What the generated HTML shows
-- 5 views: Overview (zoomable canvas), Flows, Wiring, Insights (health score + security scan), Live
+- 4 views: Overview (zoomable canvas), Flows, Wiring, Insights (health score + security scan)
 - Auto-detects 20+ languages, 15+ frameworks
 - Maps imports, API calls, events, data references
-- **Security scanner** detects: SQL injection, XSS, command injection, path traversal, SSRF, insecure deserialization, hardcoded secrets, weak crypto, CORS misconfig, prototype pollution, open redirects, ReDoS, dangerous eval, disabled SSL verification, debug mode in prod, insecure cookie flags
+- **Built-in security scanner** detects 15+ vulnerability types with line numbers
 - Health scoring, cycle detection, impact analysis
-- Virtual rendering for large projects (500+ files) — only visible nodes rendered, smooth pan/zoom
-- All processing happens in HTML's built-in JS engine — no extra AI tokens after generation
+- Virtual rendering for large projects (500+ files) — smooth pan/zoom
+- CLI-only mode — no folder picker, no live watch, no upload. Run `/flowmap <project>` to use.
