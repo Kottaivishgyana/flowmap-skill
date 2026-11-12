@@ -1655,7 +1655,7 @@ $('#v-live').addEventListener('click', e => {
   if (b) { const a = b.dataset.live;
     if (a === 'open') openLive(); else if (a === 'stop') { stopWatch(); renderHeader(); renderLive(); }
     else if (a === 'sim') { S.live.sim ? stopSim() : startSim(); renderHeader(); renderLive(); }
-    else if (a === 'upload') $('#dirInput').click(); else if (a === 'clear') { S.live.feed = []; renderLive(); }
+    else if (a === 'clear') { S.live.feed = []; renderLive(); }
     else if (a === 'sample') { $('#traceIn').value = DEMOS[S.demoKey].trace; }
     else if (a === 'trace') {
       const fr = mapTrace($('#traceIn').value); const hit = fr.filter(f => f.file);
@@ -1789,7 +1789,7 @@ document.addEventListener('keydown', e => {
   else if (k === 'd') { S.detailOpen = !S.detailOpen; renderDetail(); }
   else if (k === 't') themeToggle();
   else if (k === 'e') openExport();
-  else if (k === 'l') { if (!S.live.timer) { S.live.sim ? stopSim() : startSim(); renderHeader(); if (S.view === 'live') renderLive(); } }
+  else if (k === 'l') { /* live mode removed — CLI only */ }
   else if (k === '?') openPal();
   else if (k === 'Escape') { if (!$('#expBg').hidden) $('#expBg').hidden = true; else { setMode(null); S.sel = null; S.hl = null; applyHighlight(); renderDetail(); } }
 });
@@ -1805,28 +1805,16 @@ setInterval(() => { if (S.view === 'overview' && S.live.recent.size) { const now
 // Decompress zlib+base64 payload using DecompressionStream (modern browsers)
 async function decompressPayload(b64) {
   const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-  // Try native DecompressionStream first (zero-copy, fast)
-  if (typeof DecompressionStream !== 'undefined') {
-    const ds = new DecompressionStream('deflate');
-    // zlib = 2-byte header + deflate + 4-byte checksum; strip for raw deflate
-    const raw = bin.slice(2, -4);
-    const writer = ds.writable.getWriter();
-    writer.write(raw); writer.close();
-    const reader = ds.readable.getReader();
-    const chunks = []; let len = 0;
-    while (true) { const {done, value} = await reader.read(); if (done) break; chunks.push(value); len += value.length; }
-    const out = new Uint8Array(len); let off = 0;
-    for (const c of chunks) { out.set(c, off); off += c.length; }
-    return new TextDecoder().decode(out);
-  }
-  // Fallback: pako-style inline inflate (minimal zlib decompress)
-  return _zlibInflate(bin);
-}
-// Minimal zlib inflate fallback for older browsers
-function _zlibInflate(data) {
-  // Use sync approach via fetch trick
-  const blob = new Blob([data]);
-  return new Response(new Response(blob.stream().pipeThrough(new DecompressionStream('deflate'))).body).text();
+  // DecompressionStream 'deflate' handles zlib format (RFC 1950) — pass full data
+  const ds = new DecompressionStream('deflate');
+  const writer = ds.writable.getWriter();
+  writer.write(bin); writer.close();
+  const reader = ds.readable.getReader();
+  const chunks = []; let len = 0;
+  while (true) { const {done, value} = await reader.read(); if (done) break; chunks.push(value); len += value.length; }
+  const out = new Uint8Array(len); let off = 0;
+  for (const c of chunks) { out.set(c, off); off += c.length; }
+  return new TextDecoder().decode(out);
 }
 
 async function loadPreloadData() {
@@ -1835,29 +1823,29 @@ async function loadPreloadData() {
     busy(true, 'Decompressing project data…');
     try {
       const json = await decompressPayload(_FLOWMAP_COMPRESSED);
+      busy(true, 'Parsing project data…');
       preload = JSON.parse(json);
     } catch(e) {
-      // Fallback: try raw base64 decode (in case of encoding issues)
-      try {
-        const json = atob(_FLOWMAP_COMPRESSED);
-        preload = JSON.parse(json);
-      } catch(e2) {
-        busy(false);
-        toast('Failed to decompress data: ' + e.message);
-        return;
-      }
+      console.error('Decompress failed:', e);
+      busy(false);
+      toast('Failed to load data: ' + e.message);
+      return;
     }
     busy(false);
   } else if (typeof _FLOWMAP_PRELOAD !== 'undefined') {
     preload = _FLOWMAP_PRELOAD;
   }
   if (!preload) return false;
+  busy(true, 'Loading ' + Object.keys(preload.files).length + ' files…');
   const now = Date.now();
   for (const [p, t] of Object.entries(preload.files)) {
     S.fmap.set(p, {text: t, mtime: now, size: t.length});
   }
   Object.assign(S, {name: preload.name, industry: '', stackLabel: '', source: 'snapshot', sel: null, hl: null, mode: null});
-  resetLive(); rebuild(true);
+  resetLive();
+  // Yield to browser before heavy analysis
+  await new Promise(r => setTimeout(r, 50));
+  rebuild(true);
   toast('Loaded ' + S.fmap.size + ' files.');
   return true;
 }
