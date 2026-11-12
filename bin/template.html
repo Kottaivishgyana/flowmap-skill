@@ -429,11 +429,93 @@ function parseFile(path, text){
     m => { const v = m.slice(1).find(Boolean); if (v && !f.envs.includes(v)) f.envs.push(v); });
   if (!/\.(md|txt|rst)$/.test(name) && !/(^|\/)(tests?|__tests__|spec)\//.test(path)) {
     const seen = new Set();
+    const addVuln = (line, kind, sev) => { if (!seen.has(line + ':' + kind)) { seen.add(line + ':' + kind); f.secrets.push({line, kind, sev: sev || 'high'}); } };
+    // --- Hardcoded credentials ---
     each(/(?:api[_-]?key|secret(?:_key)?|password|passwd|auth[_-]?token|access[_-]?token|private[_-]?key|access[_-]?key)["']?\s*[:=]\s*["']([^"'\s]{8,})["']/gi, m => {
       if (/^(\$\{|process|os\.|env|<|your|xxx|changeme|example|placeholder|\*+)/i.test(m[1])) return;
-      const l = ln(m.index); if (!seen.has(l)) { seen.add(l); f.secrets.push({line:l, kind:'Hard-coded credential'}); } });
-    each(/AKIA[0-9A-Z]{16}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|sk_live_[0-9a-zA-Z]{10,}|ghp_[0-9A-Za-z]{30,}|xox[baprs]-[0-9A-Za-z-]{10,}/g, m => {
-      const l = ln(m.index); if (!seen.has(l)) { seen.add(l); f.secrets.push({line:l, kind:'Key or token in source'}); } });
+      addVuln(ln(m.index), 'Hard-coded credential'); });
+    each(/AKIA[0-9A-Z]{16}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|sk_live_[0-9a-zA-Z]{10,}|ghp_[0-9A-Za-z]{30,}|xox[baprs]-[0-9A-Za-z-]{10,}|eyJ[A-Za-z0-9_-]{20,}\.eyJ[A-Za-z0-9_-]{20,}/g, m => {
+      addVuln(ln(m.index), 'Key or token in source'); });
+    // --- SQL Injection ---
+    if (isPy) {
+      each(/(?:cursor\.execute|\.raw|\.extra)\(\s*(?:f['"]|['"].*?%s.*?%|.*?\+\s*[\w.]+|.*?\.format\()/g, m => addVuln(ln(m.index), 'Possible SQL injection', 'high'));
+      each(/(?:execute|executemany)\(\s*['"].*?\+/g, m => addVuln(ln(m.index), 'Possible SQL injection', 'high'));
+    }
+    if (isJS) {
+      each(/(?:\.query|\.execute|\.raw)\(\s*(?:`[^`]*\$\{|['"][^'"]*['"]\s*\+)/g, m => addVuln(ln(m.index), 'Possible SQL injection', 'high'));
+      each(/(?:\.query|\.execute|\.raw)\(\s*['"].*?\+\s*(?:req\.|params\.|body\.|query\.)/g, m => addVuln(ln(m.index), 'SQL injection via user input', 'high'));
+    }
+    if (ext === 'java' || ext === 'kt') {
+      each(/(?:createQuery|createNativeQuery|prepareStatement|executeQuery)\(\s*(?:".*?"\s*\+|String\.format)/g, m => addVuln(ln(m.index), 'Possible SQL injection', 'high'));
+    }
+    if (ext === 'go') {
+      each(/(?:db\.(?:Query|Exec|QueryRow))\(\s*(?:fmt\.Sprintf|.*?\+)/g, m => addVuln(ln(m.index), 'Possible SQL injection', 'high'));
+    }
+    if (ext === 'php') {
+      each(/(?:mysql_query|mysqli_query|->query)\(\s*(?:"\s*\.\s*\$|.*?\$_(?:GET|POST|REQUEST))/g, m => addVuln(ln(m.index), 'SQL injection via user input', 'high'));
+    }
+    // --- XSS ---
+    if (isJS) {
+      each(/\.innerHTML\s*=\s*(?!['"`]<)/g, m => addVuln(ln(m.index), 'Possible XSS via innerHTML', 'high'));
+      each(/dangerouslySetInnerHTML\s*=\s*\{\s*\{\s*__html\s*:/g, m => addVuln(ln(m.index), 'Possible XSS via dangerouslySetInnerHTML', 'med'));
+      each(/document\.write\s*\(/g, m => addVuln(ln(m.index), 'Possible XSS via document.write', 'high'));
+      each(/\$\(\s*['"].*?\)\s*\.html\(\s*(?!['"`])/g, m => addVuln(ln(m.index), 'Possible XSS via jQuery .html()', 'med'));
+    }
+    if (isPy) {
+      each(/\|safe\b|\bmark_safe\(|Markup\(/g, m => addVuln(ln(m.index), 'Possible XSS — unescaped output', 'med'));
+    }
+    if (ext === 'php') {
+      each(/echo\s+\$_(?:GET|POST|REQUEST|COOKIE)/g, m => addVuln(ln(m.index), 'XSS — echoing user input', 'high'));
+    }
+    // --- Command Injection ---
+    each(/\b(?:child_process|exec|execSync|spawn|spawnSync)\s*\(\s*(?:`[^`]*\$\{|.*?\+\s*(?:req\.|params\.|body\.|query\.|args|input|user))/g, m => addVuln(ln(m.index), 'Possible command injection', 'high'));
+    if (isPy) {
+      each(/\b(?:os\.system|os\.popen|subprocess\.(?:call|run|Popen|check_output|check_call|getoutput))\s*\(\s*(?:f['"]|.*?\+|.*?\.format\(|.*?%\s)/g, m => addVuln(ln(m.index), 'Possible command injection', 'high'));
+      each(/\beval\(\s*(?!['"])/g, m => addVuln(ln(m.index), 'Dangerous eval() call', 'high'));
+    }
+    if (ext === 'php') {
+      each(/\b(?:exec|system|passthru|shell_exec|popen|proc_open)\s*\(\s*\$/g, m => addVuln(ln(m.index), 'Possible command injection', 'high'));
+    }
+    if (ext === 'rb') {
+      each(/\b(?:system|exec|%x|`)\s*(?:\(?\s*["'].*?#\{|\(?\s*.*?\+)/g, m => addVuln(ln(m.index), 'Possible command injection', 'high'));
+    }
+    // --- Path Traversal ---
+    each(/(?:readFile|readFileSync|createReadStream|open|sendFile)\s*\(\s*(?:req\.|params\.|body\.|query\.|args|input|user|path\.join\(\s*(?:req|params|body|query))/g, m => addVuln(ln(m.index), 'Possible path traversal', 'high'));
+    if (isPy) {
+      each(/\bopen\(\s*(?:request\.|args\.|kwargs|f['"].*?\{(?:request|args))/g, m => addVuln(ln(m.index), 'Possible path traversal', 'high'));
+    }
+    // --- Insecure Deserialization ---
+    if (isPy) {
+      each(/\bpickle\.(?:loads?|Unpickler)\b/g, m => addVuln(ln(m.index), 'Insecure deserialization (pickle)', 'high'));
+      each(/\byaml\.(?:load|unsafe_load)\(\s*(?!.*Loader\s*=\s*(?:yaml\.)?SafeLoader)/g, m => addVuln(ln(m.index), 'Insecure YAML load', 'med'));
+    }
+    if (isJS) {
+      each(/\bJSON\.parse\(\s*(?:req\.|body\.|params\.)/g, m => addVuln(ln(m.index), 'Unvalidated JSON deserialization', 'low'));
+      each(/\bserialize\s*\(\s*(?:req\.|body\.|user)/g, m => addVuln(ln(m.index), 'Possible insecure deserialization', 'med'));
+    }
+    if (ext === 'java') {
+      each(/\bObjectInputStream\b/g, m => addVuln(ln(m.index), 'Insecure Java deserialization', 'high'));
+    }
+    // --- SSRF ---
+    each(/\b(?:fetch|axios|requests?\.get|httpx?\.get|urllib\.request|http\.get|HttpClient)\s*\(\s*(?:req\.|params\.|body\.|query\.|args|input|user)/g, m => addVuln(ln(m.index), 'Possible SSRF', 'high'));
+    // --- Weak Crypto ---
+    each(/\b(?:md5|sha1|DES|RC4)\b\s*\(/gi, m => addVuln(ln(m.index), 'Weak cryptographic algorithm', 'med'));
+    each(/\bMath\.random\(\s*\)/g, m => { if (/(?:token|secret|password|key|nonce|salt|csrf|session|auth)/i.test(text.slice(Math.max(0, m.index - 120), m.index + 80))) addVuln(ln(m.index), 'Math.random() for security-sensitive value', 'high'); });
+    // --- Insecure Config ---
+    each(/(?:cors|CORS)\s*\(\s*\{[^}]*origin\s*:\s*(?:true|['"]\*['"]|\[?\s*['"]\*['"])/g, m => addVuln(ln(m.index), 'CORS allows all origins', 'med'));
+    each(/(?:verify|SSL_VERIFYPEER|rejectUnauthorized|check_hostname)\s*[:=]\s*(?:false|False|0)\b/g, m => addVuln(ln(m.index), 'SSL/TLS verification disabled', 'high'));
+    each(/\bDEBUG\s*[:=]\s*(?:true|True|1)\b/g, m => { if (!/test|spec|dev|local/.test(path)) addVuln(ln(m.index), 'Debug mode enabled', 'med'); });
+    each(/(?:httpOnly|HttpOnly)\s*[:=]\s*(?:false|False)\b/g, m => addVuln(ln(m.index), 'Cookie missing httpOnly flag', 'med'));
+    each(/(?:secure)\s*[:=]\s*(?:false|False)\b/g, m => { if (/cookie|session|Cookie/i.test(text.slice(Math.max(0, m.index - 200), m.index))) addVuln(ln(m.index), 'Cookie missing Secure flag', 'med'); });
+    // --- Open Redirect ---
+    each(/(?:redirect|location\.href|window\.location|res\.redirect)\s*(?:=|\()\s*(?:req\.|params\.|body\.|query\.)/g, m => addVuln(ln(m.index), 'Possible open redirect', 'med'));
+    // --- Prototype Pollution ---
+    if (isJS) {
+      each(/\b(?:Object\.assign|_\.merge|_\.extend|_\.defaultsDeep|lodash\.merge)\s*\(\s*(?:\{\}|target|dest|obj)\s*,\s*(?:req\.|body\.|params\.|query\.|input|user)/g, m => addVuln(ln(m.index), 'Possible prototype pollution', 'high'));
+      each(/\[(?:req|body|params|query|input|key|prop)\s*(?:\[|\.)\s*\w*\]\s*=/g, m => addVuln(ln(m.index), 'Dynamic property assignment from user input', 'med'));
+    }
+    // --- Regex DoS ---
+    each(/new\s+RegExp\(\s*(?:req\.|params\.|body\.|query\.|input|user)/g, m => addVuln(ln(m.index), 'Regex from user input (ReDoS risk)', 'med'));
   }
   if (code) {
     const fnRe = isPy ? /^\s*(?:async\s+)?def\s+\w+/gm : ext==='go' ? /^func\s/gm : ext==='rs' ? /\bfn\s+\w+/g : ext==='rb' ? /^\s*def\s+/gm : ext==='ex'||ext==='exs' ? /^\s*defp?\s+/gm
@@ -752,7 +834,35 @@ function analyze(fmap){
   // issues
   const issues = []; const add = (sev, kind, title, detail, files) => issues.push({sev, kind, title, detail, files});
   for (const c of cycles) add('high', 'cycle', `Circular dependency between ${c.length} files`, 'These files import each other in a loop, so none can change or load on its own. Move the shared part into a separate module.', c);
-  for (const n of nodes) if (n.secrets.length) add('high', 'secret', `${n.secrets[0].kind} in ${n.name}`, `Line ${n.secrets.map(s => s.line).join(', ')}. Move it to an environment variable or a secrets manager, then rotate it.`, [n.path]);
+  for (const n of nodes) {
+    const creds = n.secrets.filter(s => !s.sev || s.sev === 'high');
+    const meds = n.secrets.filter(s => s.sev === 'med');
+    const lows = n.secrets.filter(s => s.sev === 'low');
+    // Group by kind for cleaner display
+    const byKind = new Map();
+    for (const s of n.secrets) { const arr = byKind.get(s.kind) || []; arr.push(s); byKind.set(s.kind, arr); }
+    for (const [kind, items] of byKind) {
+      const sev = items[0].sev || 'high';
+      const lines = items.map(s => s.line).join(', ');
+      const detail = kind.includes('credential') || kind.includes('Key or token')
+        ? `Line ${lines}. Move it to an environment variable or a secrets manager, then rotate it.`
+        : kind.includes('SQL injection') ? `Line ${lines}. Use parameterized queries or prepared statements instead of string concatenation.`
+        : kind.includes('XSS') ? `Line ${lines}. Sanitize or escape user-supplied data before inserting into DOM.`
+        : kind.includes('command injection') ? `Line ${lines}. Use safe APIs (e.g. execFile, subprocess with list args) instead of shell strings.`
+        : kind.includes('path traversal') ? `Line ${lines}. Validate and sanitize file paths; reject directory traversal sequences.`
+        : kind.includes('deserialization') ? `Line ${lines}. Avoid deserializing untrusted data or use safe loaders.`
+        : kind.includes('SSRF') ? `Line ${lines}. Validate and whitelist URLs before making server-side requests.`
+        : kind.includes('prototype pollution') ? `Line ${lines}. Avoid merging user input into objects. Use Object.create(null) or validate keys.`
+        : kind.includes('CORS') ? `Line ${lines}. Restrict CORS origins to trusted domains.`
+        : kind.includes('SSL') ? `Line ${lines}. Enable certificate verification in production.`
+        : kind.includes('redirect') ? `Line ${lines}. Validate redirect URLs against a whitelist.`
+        : kind.includes('crypto') || kind.includes('Math.random') ? `Line ${lines}. Use a cryptographically secure algorithm or CSPRNG.`
+        : kind.includes('ReDoS') ? `Line ${lines}. Do not construct regex from user input; sanitize or use a safe regex library.`
+        : kind.includes('eval') ? `Line ${lines}. Avoid eval on dynamic data; use safe alternatives.`
+        : `Line ${lines}. Review and fix this security issue.`;
+      add(sev, 'vuln', `${kind} in ${n.name}`, detail, [n.path]);
+    }
+  }
   for (const u of unmatched) add('med', 'unmatched', `No route answers ${u.call.method} ${u.call.url}`, `Called from ${u.file.split('/').pop()} line ${u.call.line}. The URL or method may be misspelled, or the endpoint was removed.`, [u.file]);
   for (const ev of events) for (const l of ev.listen) if (l.missing) add('med', 'hook', `Hook points to a missing function`, `${ev.name} → ${l.missing} does not resolve to a file in this project.`, [l.via]);
   const entry0 = /^(index|main|app|server|program|startup|bootstrap|application)\./i;
@@ -782,7 +892,9 @@ function analyze(fmap){
   const L = id => nodes.some(n => n.layer === id);
   const kind = stack.some(s => s.name === 'Frappe') ? 'ERP app (Frappe)' : has('mobile') ? 'Mobile app' : nodes.filter(n => n.lang === 'Docker').length > 2 ? 'Microservices' : (L('ui') && L('api')) ? 'Full-stack web app' : L('api') ? 'Backend service' : L('ui') ? 'Frontend app' : nodes.some(n => n.ext === 'ipynb') || stack.some(s => /Pandas|PyTorch|TensorFlow/.test(s.name)) ? 'Data / ML project' : 'Library or codebase';
 
-  let health = 100 - 8 * cycles.length - 10 * nodes.filter(n => n.secrets.length).length - 3 * unmatched.length - 3 * issues.filter(i => i.kind === 'layer').length - 2 * issues.filter(i => i.kind === 'god').length - Math.min(8, orphans.length) - Math.round(12 * (testable.length ? untested.length / testable.length : 0)) - Math.min(5, Math.floor(todos / 4));
+  const vulnHigh = issues.filter(i => i.kind === 'vuln' && i.sev === 'high').length;
+  const vulnMed = issues.filter(i => i.kind === 'vuln' && i.sev === 'med').length;
+  let health = 100 - 8 * cycles.length - 12 * vulnHigh - 5 * vulnMed - 3 * unmatched.length - 3 * issues.filter(i => i.kind === 'layer').length - 2 * issues.filter(i => i.kind === 'god').length - Math.min(8, orphans.length) - Math.round(12 * (testable.length ? untested.length / testable.length : 0)) - Math.min(5, Math.floor(todos / 4));
   health = Math.max(0, Math.min(100, health));
   const sevRank = {high:0, med:1, low:2}; issues.sort((a, b) => sevRank[a.sev] - sevRank[b.sev]);
 
@@ -1098,20 +1210,102 @@ function nodeHTML(n, p){
   const changed = S.live.recent.has(n.path) && Date.now() - S.live.recent.get(n.path) < 7000;
   return `<div class="node${changed ? ' changed' : ''}" data-p="${esc(n.path)}" style="left:${p.x}px;top:${p.y}px;--lc:${L.color}" title="${esc(n.path)}"><div class="ic">${esc(SHORT[n.lang] || n.lang.slice(0, 2).toUpperCase())}</div><div class="nm"><b>${esc(n.name)}</b><span>${esc(n.dir || '/')}</span></div><div class="bdg">${shown.map(([t, c]) => `<span class="b" style="--bc:${c}">${t}</span>`).join('')}${more ? `<span class="b">+${more}</span>` : ''}</div>${n.issues.length ? WARN_SVG : ''}</div>`;
 }
-function renderMap(){
+// Virtual rendering: only create DOM for nodes/edges inside the viewport + margin
+const VIRT_MARGIN = 300; // px buffer around viewport
+let _virtRAF = null;
+function getViewport(){
+  const vp = $('#vp'); if (!vp) return {l:0,t:0,r:2000,b:2000};
+  const r = vp.getBoundingClientRect();
+  // Convert viewport rect to world coords
+  const l = (-S.px) / S.z - VIRT_MARGIN, t = (-S.py) / S.z - VIRT_MARGIN;
+  const ri = l + (r.width / S.z) + VIRT_MARGIN * 2, bo = t + (r.height / S.z) + VIRT_MARGIN * 2;
+  return {l, t, r:ri, b:bo};
+}
+function isVisible(pos, vr){ return pos.x + W > vr.l && pos.x < vr.r && pos.y + H > vr.t && pos.y < vr.b; }
+function isEdgeVisible(a, b, vr){
+  const minX = Math.min(a.x, b.x), maxX = Math.max(a.x, b.x) + W;
+  const minY = Math.min(a.y, b.y), maxY = Math.max(a.y, b.y) + H;
+  return maxX > vr.l && minX < vr.r && maxY > vr.t && minY < vr.b;
+}
+function renderMap(fullRebuild){
   renderStats();
-  const P = S.P; let html = '';
-  for (const c of S.cols) html += `<div class="colhead" style="left:${c.x}px;top:4px"><span class="dot" style="--lc:${c.layer.color}"></span>${esc(c.layer.label)}<em>${c.count}</em></div>`;
-  for (const n of P.nodes) { const p = S.pos.get(n.path); if (p) html += nodeHTML(n, p); }
-  const mk = (id, c) => `<marker id="m-${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="${c}"/></marker>`;
-  let paths = '';
-  for (const e of P.edges) { const a = S.pos.get(e.s), b = S.pos.get(e.t); if (!a || !b) continue; paths += `<path class="e-${e.type}" data-s="${esc(e.s)}" data-t="${esc(e.t)}" d="${edgePath(a, b)}"><title>${esc(e.type + ': ' + base(e.s) + ' → ' + base(e.t) + (e.label ? ' (' + e.label + ')' : ''))}</title></path>`; }
-  const world = $('#world');
-  world.innerHTML = `<svg class="edges" width="${S.bounds.w + 300}" height="${S.bounds.h + 100}"><defs>${mk('import', '#94a3b8')}${mk('http', '#3b82f6')}${mk('event', '#ef4444')}${mk('data', '#22c55e')}</defs>${paths}</svg>${html}`;
-  S.nodeEls = new Map($$('.node', world).map(el => [el.dataset.p, el]));
-  S.edgeEls = $$('path[data-s]', world); S.edgeIdx = new Map();
-  for (const el of S.edgeEls) for (const k of [el.dataset.s + '|' + el.dataset.t, el.dataset.t + '|' + el.dataset.s]) { const a = S.edgeIdx.get(k) || []; a.push(el); S.edgeIdx.set(k, a); }
+  const P = S.P, world = $('#world');
+  if (fullRebuild || !S._svgEl) {
+    // Build column headers (always few)
+    let colHtml = '';
+    for (const c of S.cols) colHtml += `<div class="colhead" style="left:${c.x}px;top:4px"><span class="dot" style="--lc:${c.layer.color}"></span>${esc(c.layer.label)}<em>${c.count}</em></div>`;
+    const mk = (id, c) => `<marker id="m-${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="${c}"/></marker>`;
+    world.innerHTML = `<svg class="edges" width="${S.bounds.w + 300}" height="${S.bounds.h + 100}"><defs>${mk('import', '#94a3b8')}${mk('http', '#3b82f6')}${mk('event', '#ef4444')}${mk('data', '#22c55e')}</defs></svg>${colHtml}`;
+    S._svgEl = $('svg.edges', world);
+    S._nodeContainer = document.createElement('div');
+    S._nodeContainer.className = 'node-container';
+    world.appendChild(S._nodeContainer);
+    S.nodeEls = new Map(); S.edgeEls = []; S.edgeIdx = new Map();
+    S._renderedNodes = new Set(); S._renderedEdges = new Set();
+  }
+  virtUpdate();
   applyFilters(); applyHighlight(); applyTransform();
+}
+function virtUpdate(){
+  const P = S.P; if (!P) return;
+  const vr = getViewport();
+  const isSmall = P.nodes.length <= 200;
+  // --- Nodes ---
+  for (const n of P.nodes) {
+    const p = S.pos.get(n.path); if (!p) continue;
+    const vis = isSmall || isVisible(p, vr);
+    if (vis && !S._renderedNodes.has(n.path)) {
+      const div = document.createElement('div');
+      div.innerHTML = nodeHTML(n, p);
+      const el = div.firstChild;
+      S._nodeContainer.appendChild(el);
+      S.nodeEls.set(n.path, el);
+      S._renderedNodes.add(n.path);
+    } else if (!vis && S._renderedNodes.has(n.path)) {
+      const el = S.nodeEls.get(n.path);
+      if (el) el.remove();
+      S.nodeEls.delete(n.path);
+      S._renderedNodes.delete(n.path);
+    }
+  }
+  // --- Edges ---
+  const svg = S._svgEl; if (!svg) return;
+  // For small projects render all edges; for large only visible
+  const edgesToRender = isSmall ? P.edges : P.edges.filter(e => {
+    const a = S.pos.get(e.s), b = S.pos.get(e.t);
+    return a && b && isEdgeVisible(a, b, vr);
+  });
+  const newEdgeKeys = new Set(edgesToRender.map(e => e.s + '|' + e.t));
+  // Remove edges no longer visible
+  for (const key of S._renderedEdges) {
+    if (!newEdgeKeys.has(key)) {
+      const elArr = S.edgeIdx.get(key);
+      if (elArr) { for (const el of elArr) el.remove(); S.edgeIdx.delete(key); const rev = key.split('|').reverse().join('|'); S.edgeIdx.delete(rev); }
+      S._renderedEdges.delete(key);
+    }
+  }
+  // Add new visible edges
+  for (const e of edgesToRender) {
+    const key = e.s + '|' + e.t;
+    if (S._renderedEdges.has(key)) continue;
+    const a = S.pos.get(e.s), b = S.pos.get(e.t); if (!a || !b) continue;
+    const ns = 'http://www.w3.org/2000/svg';
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('class', 'e-' + e.type);
+    path.dataset.s = e.s; path.dataset.t = e.t;
+    path.setAttribute('d', edgePath(a, b));
+    const title = document.createElementNS(ns, 'title');
+    title.textContent = e.type + ': ' + base(e.s) + ' → ' + base(e.t) + (e.label ? ' (' + e.label + ')' : '');
+    path.appendChild(title);
+    svg.appendChild(path);
+    for (const k of [key, e.t + '|' + e.s]) { const arr = S.edgeIdx.get(k) || []; arr.push(path); S.edgeIdx.set(k, arr); }
+    S.edgeEls.push(path);
+    S._renderedEdges.add(key);
+  }
+}
+function scheduleVirtUpdate(){
+  if (_virtRAF) return;
+  _virtRAF = requestAnimationFrame(() => { _virtRAF = null; virtUpdate(); applyFilters(); });
 }
 function applyFilters(){
   const q = S.q.toLowerCase(), P = S.P; const hidden = new Set();
@@ -1143,6 +1337,7 @@ function applyHighlight(){
 function applyTransform(){
   $('#world').style.transform = `translate(${S.px}px,${S.py}px) scale(${S.z})`;
   $('#zl').textContent = Math.round(S.z * 100) + '%'; drawMini();
+  scheduleVirtUpdate();
 }
 function fitView(){
   const vp = $('#vp'), r = vp.getBoundingClientRect(); if (!r.width || !S.bounds.w) return;
@@ -1239,7 +1434,7 @@ function onNodeClick(p){
 function selectFile(p, opts = {}){
   if (!S.P.by.has(p)) return; S.sel = p; if (!opts.keepHl) S.hl = null; S.detailOpen = true;
   if (S.view !== 'overview' && !opts.stay) go('overview');
-  const n = S.P.by.get(p); if (S.hidden.has(n.layer)) { S.hidden.delete(n.layer); layoutMap(); renderMap(); }
+  const n = S.P.by.get(p); if (S.hidden.has(n.layer)) { S.hidden.delete(n.layer); layoutMap(); renderMap(true); }
   applyHighlight(); renderDetail(); if (S.view === 'overview') { centerOn(p); const el = S.nodeEls.get(p); if (el) { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); } }
 }
 
@@ -1389,6 +1584,17 @@ function renderInsights(){
         <div class="langs">${top.map(([l, v]) => `<span><i class="dot" style="--lc:${LANG_COLOR[l] || '#64748b'}"></i>${esc(l)} ${Math.round(100 * v / tot)}%</span>`).join('')}</div>
         <div class="stack">${P.stack.length ? P.stack.map(s => `<span class="b" style="--bc:${LMAP[s.cat === 'mobile' ? 'ui' : s.cat]?.color || '#94a3b8'}">${esc(s.name)}</span>`).join('') : '<span style="color:var(--faint)">No known frameworks detected from manifests or imports.</span>'}</div></div></div>
     </div>
+    ${(() => {
+      const vulns = P.issues.filter(i => i.kind === 'vuln');
+      if (!vulns.length) return '';
+      const cats = new Map();
+      for (const v of vulns) { const cat = v.title.replace(/ in .+$/, ''); cats.set(cat, (cats.get(cat) || 0) + 1); }
+      const vhigh = vulns.filter(v => v.sev === 'high').length, vmed = vulns.filter(v => v.sev === 'med').length, vlow = vulns.filter(v => v.sev === 'low').length;
+      const vc = vhigh ? 'var(--bad)' : vmed ? 'var(--warn)' : 'var(--ok)';
+      return `<div class="card" style="border-left:3px solid ${vc}"><header><h4>Security Scan</h4><span style="color:var(--muted);font-size:11px">${vulns.length} finding${vulns.length > 1 ? 's' : ''} · ${vhigh} critical · ${vmed} warning · ${vlow} info</span></header>
+        <div class="bd"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${[...cats].sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<span class="b" style="--bc:${c.includes('injection')||c.includes('XSS')||c.includes('command')||c.includes('credential')||c.includes('Key')?'var(--bad)':'var(--warn)'}">${esc(c)} (${n})</span>`).join('')}</div>
+        <div class="rows">${vulns.slice(0,20).map(v=>`<div class="r"><span class="pill sev ${v.sev}" style="font-size:9px">${v.sev==='high'?'CRIT':v.sev==='med'?'WARN':'INFO'}</span><span class="t click" data-goto="${esc(v.files[0])}">${esc(v.title)}</span></div>`).join('')}${vulns.length > 20 ? `<div class="r"><span class="t" style="color:var(--faint)">+${vulns.length - 20} more findings in Issues below</span></div>` : ''}</div></div></div>`;
+    })()}
     <div class="card"><header><h4>Issues</h4><div class="seg">${['all', 'high', 'med', 'low'].map(s => `<button class="btn sm${S.sev === s ? ' on' : ''}" data-sev="${s}">${s === 'all' ? 'All ' + P.issues.length : sevName[s] + ' ' + counts[s]}</button>`).join('')}</div></header>
       ${list.length ? list.map(i => `<div class="iss"><span class="pill sev ${i.sev}">${sevName[i.sev]}</span><div style="min-width:0"><b>${esc(i.title)}</b><p>${esc(i.detail)}</p><div class="files">${i.files.slice(0, 12).map(p => `<span class="fl" data-goto="${esc(p)}">${esc(base(p))}</span>`).join('')}${i.files.length > 12 ? `<span class="fl">+${i.files.length - 12}</span>` : ''}</div></div>${i.files.length > 1 && i.kind !== 'tests' ? `<button class="btn sm" data-showset="${P.issues.indexOf(i)}">Show</button>` : '<span></span>'}</div>`).join('') : '<div class="empty">Nothing here. Nice.</div>'}</div>
     <div class="grid2">
@@ -1481,11 +1687,30 @@ function go(v){
   if (changed && location.hash !== '#' + v) { try { history.replaceState(null, '', '#' + v); } catch { location.hash = v; } }
 }
 function renderView(fit){
-  if (S.view === 'overview') { renderMap(); if (fit || !S.fitted) { S.fitted = true; requestAnimationFrame(fitView); } }
+  if (S.view === 'overview') { renderMap(true); if (fit || !S.fitted) { S.fitted = true; requestAnimationFrame(fitView); } }
   else if (S.view === 'flow') renderFlows(); else if (S.view === 'wiring') renderWiring(); else if (S.view === 'insights') renderInsights(); else renderLive();
 }
 function renderAll(fit){ renderHeader(); renderSidebar(); renderView(fit); renderDetail(); }
-function rebuild(fit){ S.P = analyze(S.fmap); layoutMap(); renderAll(fit); }
+function rebuild(fit){
+  const n = S.fmap.size;
+  if (n > 200) {
+    busy(true, `Analyzing ${n} files…`);
+    // Use setTimeout to yield to browser between heavy steps
+    setTimeout(() => {
+      try {
+        S.P = analyze(S.fmap);
+        busy(true, 'Laying out map…');
+        setTimeout(() => {
+          layoutMap();
+          busy(true, 'Rendering…');
+          setTimeout(() => { renderAll(fit); busy(false); }, 16);
+        }, 16);
+      } catch(e) { busy(false); toast('Analysis error: ' + e.message); console.error(e); }
+    }, 30);
+  } else {
+    S.P = analyze(S.fmap); layoutMap(); renderAll(fit);
+  }
+}
 window.addEventListener('hashchange', () => go(location.hash.slice(1)));
 $('#tabs').addEventListener('click', e => { const t = e.target.closest('[data-view]'); if (t) go(t.dataset.view); });
 $('#side').addEventListener('click', e => {
@@ -1493,7 +1718,7 @@ $('#side').addEventListener('click', e => {
   const it = e.target.closest('.item'); if (it) { if (S.mode) { if (S.view !== 'overview') go('overview'); onNodeClick(it.dataset.p); centerOn(it.dataset.p); } else selectFile(it.dataset.p, {stay:false}); }
 });
 $('#legend').addEventListener('click', e => {
-  const l = e.target.closest('[data-layer]'); if (l) { const id = l.dataset.layer; S.hidden.has(id) ? S.hidden.delete(id) : S.hidden.add(id); layoutMap(); renderMap(); return; }
+  const l = e.target.closest('[data-layer]'); if (l) { const id = l.dataset.layer; S.hidden.has(id) ? S.hidden.delete(id) : S.hidden.add(id); layoutMap(); renderMap(true); return; }
   const t = e.target.closest('[data-etype]'); if (t) { const id = t.dataset.etype; S.etypes.has(id) ? S.etypes.delete(id) : S.etypes.add(id); t.classList.toggle('off'); applyFilters(); }
 });
 let qT; $('#q').addEventListener('input', e => { clearTimeout(qT); qT = setTimeout(() => { S.q = e.target.value.trim(); renderSidebar(); if (S.view === 'overview') { applyFilters(); drawMini(); } else renderView(); }, 60); });
@@ -1593,14 +1818,67 @@ setInterval(() => { if (S.view === 'overview' && S.live.recent.size) { const now
   S.view = VIEWS.some(x => x[0] === v) ? v : 'overview';
   for (const [id] of VIEWS) $('#v-' + id).hidden = id !== S.view;
   // Auto-load from CLI preload or show empty state
-if (typeof _FLOWMAP_PRELOAD !== 'undefined') {
+// Decompress zlib+base64 payload using DecompressionStream (modern browsers)
+async function decompressPayload(b64) {
+  const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  // Try native DecompressionStream first (zero-copy, fast)
+  if (typeof DecompressionStream !== 'undefined') {
+    const ds = new DecompressionStream('deflate');
+    // zlib = 2-byte header + deflate + 4-byte checksum; strip for raw deflate
+    const raw = bin.slice(2, -4);
+    const writer = ds.writable.getWriter();
+    writer.write(raw); writer.close();
+    const reader = ds.readable.getReader();
+    const chunks = []; let len = 0;
+    while (true) { const {done, value} = await reader.read(); if (done) break; chunks.push(value); len += value.length; }
+    const out = new Uint8Array(len); let off = 0;
+    for (const c of chunks) { out.set(c, off); off += c.length; }
+    return new TextDecoder().decode(out);
+  }
+  // Fallback: pako-style inline inflate (minimal zlib decompress)
+  return _zlibInflate(bin);
+}
+// Minimal zlib inflate fallback for older browsers
+function _zlibInflate(data) {
+  // Use sync approach via fetch trick
+  const blob = new Blob([data]);
+  return new Response(new Response(blob.stream().pipeThrough(new DecompressionStream('deflate'))).body).text();
+}
+
+async function loadPreloadData() {
+  let preload;
+  if (typeof _FLOWMAP_COMPRESSED !== 'undefined') {
+    busy(true, 'Decompressing project data…');
+    try {
+      const json = await decompressPayload(_FLOWMAP_COMPRESSED);
+      preload = JSON.parse(json);
+    } catch(e) {
+      // Fallback: try raw base64 decode (in case of encoding issues)
+      try {
+        const json = atob(_FLOWMAP_COMPRESSED);
+        preload = JSON.parse(json);
+      } catch(e2) {
+        busy(false);
+        toast('Failed to decompress data: ' + e.message);
+        return;
+      }
+    }
+    busy(false);
+  } else if (typeof _FLOWMAP_PRELOAD !== 'undefined') {
+    preload = _FLOWMAP_PRELOAD;
+  }
+  if (!preload) return false;
   const now = Date.now();
-  for (const [p, t] of Object.entries(_FLOWMAP_PRELOAD.files)) {
+  for (const [p, t] of Object.entries(preload.files)) {
     S.fmap.set(p, {text: t, mtime: now, size: t.length});
   }
-  Object.assign(S, {name: _FLOWMAP_PRELOAD.name, industry: '', stackLabel: '', source: 'snapshot', sel: null, hl: null, mode: null});
+  Object.assign(S, {name: preload.name, industry: '', stackLabel: '', source: 'snapshot', sel: null, hl: null, mode: null});
   resetLive(); rebuild(true);
   toast('Loaded ' + S.fmap.size + ' files.');
+  return true;
+}
+if (typeof _FLOWMAP_COMPRESSED !== 'undefined' || typeof _FLOWMAP_PRELOAD !== 'undefined') {
+  loadPreloadData();
 } else {
   // No data — show empty state, user can drag-drop or use folder picker
   Object.assign(S, {name: 'Flowmap', source: 'snapshot', sel: null});

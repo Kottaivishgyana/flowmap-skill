@@ -17,6 +17,8 @@ Usage:
 import os
 import sys
 import json
+import zlib
+import base64
 from pathlib import Path
 
 IGNORE_DIRS = {'.git', 'node_modules', '__pycache__', '.next', 'dist', 'build',
@@ -123,17 +125,24 @@ def generate(root, files, project_name):
 
     template = template_path.read_text(errors='ignore')
 
-    preload_data = json.dumps({"name": project_name, "files": files})
-    # Escape </script> to prevent HTML breakage
-    preload_data = preload_data.replace('</script>', '<\\/script>')
-    preload_data = preload_data.replace('</Script>', '<\\/Script>')
-    preload_data = preload_data.replace('</SCRIPT>', '<\\/SCRIPT>')
+    preload_json = json.dumps({"name": project_name, "files": files})
+    raw_mb = len(preload_json) / (1024 * 1024)
 
-    # Check size
-    size_mb = len(preload_data) / (1024 * 1024)
-    print(f"  HTML data size: {size_mb:.1f} MB")
-
-    inject_script = f'<script>const _FLOWMAP_PRELOAD = {preload_data};</script>\n'
+    # For large payloads: compress with zlib + base64 to shrink HTML size
+    if raw_mb > 1.0:
+        compressed = zlib.compress(preload_json.encode('utf-8'), 9)
+        encoded = base64.b64encode(compressed).decode('ascii')
+        comp_mb = len(encoded) / (1024 * 1024)
+        print(f"  Data: {raw_mb:.1f} MB raw → {comp_mb:.1f} MB compressed ({100 - comp_mb/raw_mb*100:.0f}% smaller)")
+        inject_script = f'<script>const _FLOWMAP_COMPRESSED = "{encoded}";</script>\n'
+    else:
+        # Small projects: inline JSON directly (no decompression overhead)
+        preload_data = preload_json
+        preload_data = preload_data.replace('</script>', '<\\/script>')
+        preload_data = preload_data.replace('</Script>', '<\\/Script>')
+        preload_data = preload_data.replace('</SCRIPT>', '<\\/SCRIPT>')
+        print(f"  HTML data size: {raw_mb:.1f} MB")
+        inject_script = f'<script>const _FLOWMAP_PRELOAD = {preload_data};</script>\n'
 
     html = template.replace('<script>\n/* ---', inject_script + '<script>\n/* ---', 1)
     if inject_script not in html:
