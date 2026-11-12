@@ -1010,7 +1010,7 @@ async function loadFromHandle(h){
     S.live.handle = h; startWatch(); renderHeader();
   } catch (e) { busy(false); toast('Could not read that folder: ' + e.message); }
 }
-function openLive(){ toast(‘Live mode disabled. Run /flowmap from Claude Code.’); }
+function openLive(){ toast('Live mode disabled. Run /flowmap from Claude Code.'); }
 /* dirInput removed — CLI-only mode */
 function readEntry(entry, prefix, out){
   return new Promise(res => {
@@ -1613,7 +1613,7 @@ function renderLive(){
           ${!watching ? `<button class="btn${sim ? ' on' : ''}" data-live="sim">${sim ? 'Stop simulation' : 'Simulate live edits'}</button>` : ''}
           <button class="btn" data-live="upload">Upload a snapshot</button>
         </div>
-        ${canLive ? '' : '<div class="note warn" style="margin-top:12px">This browser can’t watch folders. Use Chrome or Edge for live mode, or upload snapshots.</div>'}
+        ${canLive ? '' : '<div class="note warn" style="margin-top:12px">This browser cannot watch folders. Use Chrome or Edge for live mode, or upload snapshots.</div>'}
         <div class="meta" id="liveMeta">${liveMetaHTML()}</div>
         <div style="margin-top:12px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em"><span>Changes per scan</span><span>last ${L.rate.length} scans</span></div><div id="sparkBox">${sparkSVG()}</div></div></div></div>
       <div class="card"><header><h4>Activity</h4>${L.feed.length ? '<button class="btn sm" data-live="clear">Clear</button>' : ''}</header><div class="feed">${L.feed.length ? L.feed.slice(0, 80).map(ev => `<div class="ev${ev.fresh ? ' fresh' : ''}"><time>${timeStr(ev.t)}</time><span class="k ${ev.kind}">${ev.kind === 'added' ? '+' : ev.kind === 'removed' ? '−' : '~'}</span><div style="min-width:0"><b data-goto="${esc(ev.path)}">${esc(ev.path)}</b><p>${esc(ev.kind)}${ev.details.length ? ' · ' + ev.details.map(esc).join(' · ') : ''}${ev.origin === 'sim' ? ' · simulated' : ''}</p></div></div>`).join('') : '<div class="empty">No changes yet. Start watching a folder, or simulate edits on this project, then save a file and watch it appear here.</div>'}</div></div>
