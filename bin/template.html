@@ -1010,16 +1010,8 @@ async function loadFromHandle(h){
     S.live.handle = h; startWatch(); renderHeader();
   } catch (e) { busy(false); toast('Could not read that folder: ' + e.message); }
 }
-async function openLive(){
-  closeMenu();
-  if (!window.showDirectoryPicker) { toast('Live watching needs Chrome or Edge. Opening a one-time snapshot instead.'); return $('#dirInput').click(); }
-  try { const h = await window.showDirectoryPicker({mode:'read'}); await loadFromHandle(h); }
-  catch (e) { if (e.name === 'AbortError') return; toast('This page can’t open the folder picker here. Drag the folder onto Flowmap instead.'); }
-}
-$('#dirInput').addEventListener('change', e => {
-  const list = [...e.target.files].filter(f => { const parts = f.webkitRelativePath.split('/'); return wantFile(f.name) && !parts.slice(0, -1).some(skipDir); }).map(f => [f.webkitRelativePath, f]);
-  filesToMap(list, null, 'snapshot'); e.target.value = '';
-});
+function openLive(){ toast(‘Live mode disabled. Run /flowmap from Claude Code.’); }
+/* dirInput removed — CLI-only mode */
 function readEntry(entry, prefix, out){
   return new Promise(res => {
     if (out.length > MAX_FILES) return res();
